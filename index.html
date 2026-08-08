@@ -4,6 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
 <title>동행프로그램 조회 시스템</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.4.1/papaparse.min.js"></script>
 <style>
 *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 :root {
@@ -516,6 +517,7 @@ body {
     <div class="modal-body">
       <div class="admin-tabs">
         <button class="admin-tab-btn ac" data-admin="roster">학생명렬 가져오기</button>
+        <button class="admin-tab-btn" data-admin="records">지난 기록 가져오기</button>
         <button class="admin-tab-btn" data-admin="counter">누적 초기값 입력</button>
         <button class="admin-tab-btn" data-admin="approve">외부 계정 승인</button>
       </div>
@@ -525,8 +527,17 @@ body {
 10102	이영희"></textarea>
         <button class="btn-main ok" id="importRosterBtn">📥 학생명렬 일괄 등록</button>
       </div>
+      <div class="admin-panel" id="admin-records">
+        <div class="hint" style="margin-bottom:10px;">
+          구글시트에서 <b>학번, 이름, 날짜, 교시, 담당교사, 유형, 내용, 누적여부, 누적횟수</b> 9개 열 전체를 순서 그대로 복사해서 붙여넣으세요 (헤더 행은 빼고 데이터 행만).<br>
+          누적횟수 칸은 비워두면 학생별로 날짜순 자동 재계산됩니다. 누적여부는 YES/NO/OFFSET만 인식합니다.<br>
+          <b style="color:var(--danger)">⚠️ 되돌릴 수 없고, 같은 내용을 두 번 붙여넣으면 기록이 중복 저장되니 한 번만 실행하세요.</b>
+        </div>
+        <textarea id="recordsImportText" style="width:100%;min-height:200px;padding:10px;border:1.5px solid var(--gray2);border-radius:var(--radius-sm);font-family:monospace;font-size:12px;" placeholder="10101	김철수	2026-03-05	1교시	김선생	복장불량	교복 셔츠 미착용	NO	"></textarea>
+        <button class="btn-main ok" id="importRecordsBtn">📥 지난 기록 일괄 등록</button>
+      </div>
       <div class="admin-panel" id="admin-counter">
-        <div class="hint" style="margin-bottom:10px;">한 줄에 "학번[탭 또는 콤마]현재누적횟수" 형식으로 붙여넣으세요. 기존 시트의 마지막 누적 상태를 옮길 때 사용합니다.</div>
+        <div class="hint" style="margin-bottom:10px;">한 줄에 "학번[탭 또는 콤마]현재누적횟수" 형식으로 붙여넣으세요. 위 "지난 기록 가져오기"를 이미 하셨다면 이 도구는 필요 없습니다 (자동 계산됨). 기록 내용 없이 숫자만 옮기고 싶을 때만 사용하세요.</div>
         <textarea id="counterImportText" style="width:100%;min-height:160px;padding:10px;border:1.5px solid var(--gray2);border-radius:var(--radius-sm);font-family:monospace;font-size:13px;" placeholder="10101	3
 10102	0"></textarea>
         <button class="btn-main ok" id="importCounterBtn">📥 누적 초기값 일괄 등록</button>
@@ -720,6 +731,7 @@ function initUiOnce(){
     b.classList.add('ac'); document.getElementById('admin-'+b.dataset.admin).classList.add('active');
   }));
   document.getElementById('importRosterBtn').addEventListener('click', importRoster);
+  document.getElementById('importRecordsBtn').addEventListener('click', importFullRecords);
   document.getElementById('importCounterBtn').addEventListener('click', importCounters);
   document.getElementById('addApprovedBtn').addEventListener('click', addApprovedEmail);
 }
@@ -1315,6 +1327,101 @@ function refreshActiveViews(){
   refreshStudentSearchIfActive();
 }
 
+// ── 관리자: 지난 기록(전체 필드) 일괄 가져오기 ──
+function pad2(v){ return String(v).padStart(2,'0'); }
+function normalizeDateStrClient(raw){
+  if(!raw) return '';
+  const s = raw.toString().trim();
+  if(!s) return '';
+  let m;
+  m = /^(\d{4})-(\d{1,2})-(\d{1,2})/.exec(s);
+  if(m) return `${m[1]}-${pad2(m[2])}-${pad2(m[3])}`;
+  m = /^(\d{4})[.\/]\s*(\d{1,2})[.\/]\s*(\d{1,2})/.exec(s);
+  if(m) return `${m[1]}-${pad2(m[2])}-${pad2(m[3])}`;
+  m = /^(\d{1,2})[.\/](\d{1,2})[.\/](\d{4})/.exec(s);
+  if(m) return `${m[3]}-${pad2(m[1])}-${pad2(m[2])}`;
+  const d = new Date(s);
+  if(!isNaN(d.getTime())) return `${d.getFullYear()}-${pad2(d.getMonth()+1)}-${pad2(d.getDate())}`;
+  return s; // 인식 실패 시 원본 유지 (정렬에서 맨 뒤로 밀림)
+}
+async function importFullRecords(){
+  const raw = document.getElementById('recordsImportText').value;
+  if(!raw.trim()){ showToast('⚠️ 붙여넣을 내용이 없습니다.','err'); return; }
+  if(typeof Papa === 'undefined'){ showToast('❌ 파싱 라이브러리(PapaParse)를 불러오지 못했습니다.','err'); return; }
+  const btn = document.getElementById('importRecordsBtn');
+  btn.disabled = true; btn.textContent = '가져오는 중…';
+  try{
+    const parsed = Papa.parse(raw.trim(), { delimiter:'\t', skipEmptyLines:true });
+    const rows = parsed.data || [];
+
+    const records = [];
+    let skipped = 0;
+    rows.forEach(cols=>{
+      if(!cols || cols.length < 7){ skipped++; return; }
+      const num = (cols[0]||'').toString().trim();
+      if(!/^\d{5}$/.test(num)){ skipped++; return; }
+      const name = (cols[1]||'').toString().trim();
+      const date = normalizeDateStrClient((cols[2]||'').toString());
+      const period = (cols[3]||'').toString().trim();
+      const teacher = (cols[4]||'').toString().trim();
+      const category = (cols[5]||'').toString().trim();
+      const content = (cols[6]||'').toString().trim();
+      let cum = (cols[7]||'NO').toString().trim().toUpperCase();
+      if(!['YES','OFFSET','NO'].includes(cum)) cum='NO';
+      const countRaw = (cols[8]||'').toString().trim();
+      records.push({
+        gradeClassNumber: num, name, date, period, teacher, category, content,
+        isCumulative: cum,
+        count: cum!=='NO' ? (countRaw!==''?parseInt(countRaw,10)||0:null) : '',
+        grade: num.charAt(0),
+        className: (parseInt(num.substring(1,3),10)||0)+'반',
+        importedAt: serverTimestamp()
+      });
+    });
+
+    if(!records.length){ showToast('⚠️ 유효한 행이 없습니다 (학번 5자리 확인).','err'); return; }
+
+    // 누적/상쇄 기록의 빈 count는 학생별 날짜·교시 오래된순으로 순차 계산해서 채움
+    const byStudent = {};
+    records.forEach(r=>{ if(r.isCumulative!=='NO'){ (byStudent[r.gradeClassNumber]=byStudent[r.gradeClassNumber]||[]).push(r); } });
+    Object.keys(byStudent).forEach(num=>{
+      const list = byStudent[num].slice().sort((a,b)=> a.date===b.date ? periodIdx(a.period)-periodIdx(b.period) : (a.date<b.date?-1:1));
+      let running = 0;
+      list.forEach(r=>{
+        if(r.count===null){ running = r.isCumulative==='YES' ? running+1 : Math.max(running-1,0); r.count = running; }
+        else { running = r.count; }
+      });
+      byStudent[num] = list; // 정렬된 상태로 갱신 (마지막=최신)
+    });
+
+    // Firestore 배치 쓰기 (500개 제한 대비 400개씩 분할)
+    let written=0;
+    for(let i=0;i<records.length;i+=400){
+      const chunk = records.slice(i,i+400);
+      const batch = writeBatch(db);
+      chunk.forEach(r=> batch.set(doc(collection(db,'records')), r));
+      await batch.commit();
+      written += chunk.length;
+      btn.textContent = `가져오는 중… (${written}/${records.length})`;
+    }
+
+    // 학생별 최종 누적 카운터를 방금 가져온 기록의 최신값으로 자동 갱신
+    const counterBatch = writeBatch(db);
+    Object.keys(byStudent).forEach(num=>{
+      const list = byStudent[num];
+      const last = list[list.length-1];
+      counterBatch.set(doc(db,'studentCounters',num), { count: last.count, name: last.name||'', updatedAt: serverTimestamp() }, { merge:true });
+    });
+    if(Object.keys(byStudent).length) await counterBatch.commit();
+
+    showToast(`✅ 기록 ${records.length}건 등록 완료`+(skipped?` (건너뜀 ${skipped}건)`:''), 'ok');
+    document.getElementById('recordsImportText').value='';
+  }catch(e){
+    showToast('❌ 가져오기 실패: '+e.message,'err');
+  }finally{
+    btn.disabled=false; btn.textContent='📥 지난 기록 일괄 등록';
+  }
+}
 // ── 관리자: 학생명렬 일괄 가져오기 ──
 async function importRoster(){
   const raw=document.getElementById('rosterImportText').value;

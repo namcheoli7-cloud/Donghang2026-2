@@ -469,7 +469,7 @@ body {
               </div>
             </div>
             <div class="form-row single" id="editCumCountRow" style="display:none">
-              <div class="field"><label>누적 횟수 (직접 수정 가능)</label><input type="number" id="editCount" min="0" max="99"></div>
+              <div class="hint" style="padding:9px 11px;background:var(--gray0);border-radius:var(--radius-sm);">ℹ️ 누적 횟수는 저장 시 날짜·교시 순서를 기준으로 자동 계산됩니다 (직접 입력 불가).</div>
             </div>
             <div style="display:flex;gap:8px;margin-top:14px;">
               <button class="btn-main ok" style="margin-top:0" id="doUpdateBtn">💾 수정 저장</button>
@@ -515,6 +515,7 @@ body {
   <div class="modal-wrap" id="adminModal">
     <div class="modal-header"><button class="modal-close" id="adminCloseBtn">✕ 닫기</button><span class="modal-title">⚙️ 관리자 설정</span></div>
     <div class="modal-body">
+      <button class="btn-main" id="recalcAllBtn" style="background:var(--warn);margin-top:0;margin-bottom:16px;">🔄 전체 학생 누적 번호 다시 계산하기 (날짜순 정합성 맞추기)</button>
       <div class="admin-tabs">
         <button class="admin-tab-btn ac" data-admin="roster">학생명렬 가져오기</button>
         <button class="admin-tab-btn" data-admin="records">지난 기록 가져오기</button>
@@ -538,6 +539,7 @@ body {
       </div>
       <div class="admin-panel" id="admin-counter">
         <div class="hint" style="margin-bottom:10px;">한 줄에 "학번[탭 또는 콤마]현재누적횟수" 형식으로 붙여넣으세요. 위 "지난 기록 가져오기"를 이미 하셨다면 이 도구는 필요 없습니다 (자동 계산됨). 기록 내용 없이 숫자만 옮기고 싶을 때만 사용하세요.</div>
+        <div class="field" style="margin-bottom:10px;max-width:220px;"><label>기준일 (이 날짜부터 이어서 계산됩니다)</label><input type="date" id="counterBaselineDate"></div>
         <textarea id="counterImportText" style="width:100%;min-height:160px;padding:10px;border:1.5px solid var(--gray2);border-radius:var(--radius-sm);font-family:monospace;font-size:13px;" placeholder="10101	3
 10102	0"></textarea>
         <button class="btn-main ok" id="importCounterBtn">📥 누적 초기값 일괄 등록</button>
@@ -577,7 +579,7 @@ import {
 } from "https://www.gstatic.com/firebasejs/10.13.0/firebase-auth.js";
 import {
   getFirestore, collection, doc, onSnapshot, addDoc, updateDoc, deleteDoc,
-  setDoc, getDoc, runTransaction, serverTimestamp, writeBatch
+  setDoc, getDoc, getDocs, query, where, runTransaction, serverTimestamp, writeBatch
 } from "https://www.gstatic.com/firebasejs/10.13.0/firebase-firestore.js";
 
 const app = initializeApp(firebaseConfig);
@@ -733,6 +735,7 @@ function initUiOnce(){
   document.getElementById('importRosterBtn').addEventListener('click', importRoster);
   document.getElementById('importRecordsBtn').addEventListener('click', importFullRecords);
   document.getElementById('importCounterBtn').addEventListener('click', importCounters);
+  document.getElementById('recalcAllBtn').addEventListener('click', recalcAllStudents);
   document.getElementById('addApprovedBtn').addEventListener('click', addApprovedEmail);
 }
 
@@ -919,20 +922,35 @@ function cntColorCls(cnt){ if(cnt<=0)return'c0';if(cnt<=2)return'c1';if(cnt===3)
 const DANGER_CATS=['교육활동 침해','분리지도'];
 
 // ── 저장 (Firestore 트랜잭션으로 동시성 안전) ──
-async function saveOneRecordTx(payload){
-  if(payload.isCumulative==='NO'){
-    await addDoc(collection(db,'records'), { ...payload, count:'', createdAt: serverTimestamp() });
-    return;
-  }
-  await runTransaction(db, async (tx)=>{
-    const counterRef = doc(db,'studentCounters', payload.gradeClassNumber);
-    const snap = await tx.get(counterRef);
-    const current = snap.exists() ? (snap.data().count||0) : 0;
-    const next = payload.isCumulative==='YES' ? current+1 : Math.max(current-1,0);
-    tx.set(counterRef, { count: next, name: payload.name, updatedAt: serverTimestamp() }, { merge:true });
-    const newRef = doc(collection(db,'records'));
-    tx.set(newRef, { ...payload, count: next, createdAt: serverTimestamp() });
+// 학생 한 명의 누적/상쇄 기록 전체를 '날짜(교시) 순서'대로 다시 훑어서 count를 재계산하고
+// records 문서들과 studentCounters를 일괄 갱신한다. 저장/수정/삭제 후 항상 이 함수를 호출하면
+// 입력 순서와 무관하게 항상 날짜순 기준으로 정확한 번호가 매겨진다 (뒤늦은 backdate 입력도 자동 보정).
+// isBaselineAnchor:true 인 레코드는 '이전 시스템에서 이월된 시작값'으로 취급해 그 count를 그대로 기준점으로 삼는다.
+async function renumberStudentCumRecords(gradeClassNumber){
+  const q = query(collection(db,'records'), where('gradeClassNumber','==',gradeClassNumber));
+  const snap = await getDocs(q);
+  const list = snap.docs
+    .map(d=>({id:d.id, ...d.data()}))
+    .filter(r=> r.isCumulative==='YES' || r.isCumulative==='OFFSET')
+    .sort((a,b)=> a.date===b.date ? periodIdx(a.period)-periodIdx(b.period) : (a.date<b.date?-1:1));
+
+  let running=0, lastName='';
+  const batch = writeBatch(db);
+  let ops=0;
+  list.forEach(r=>{
+    if(r.isBaselineAnchor){ running = typeof r.count==='number' ? r.count : (parseInt(r.count,10)||0); }
+    else { running = r.isCumulative==='YES' ? running+1 : Math.max(running-1,0); }
+    lastName = r.name || lastName;
+    if(r.count !== running){ batch.update(doc(db,'records',r.id), { count: running }); ops++; }
   });
+  batch.set(doc(db,'studentCounters',gradeClassNumber), { count: running, name: lastName, updatedAt: serverTimestamp() }, { merge:true });
+  await batch.commit();
+  return running;
+}
+
+async function saveOneRecordTx(payload){
+  await addDoc(collection(db,'records'), { ...payload, count: payload.isCumulative==='NO' ? '' : 0, createdAt: serverTimestamp() });
+  if(payload.isCumulative!=='NO'){ await renumberStudentCumRecords(payload.gradeClassNumber); }
 }
 
 function validateCommonFields(){
@@ -1226,8 +1244,8 @@ function openEditForm(item){
   editCumValue=(item.isCumulative==='YES')?'YES':(item.isCumulative==='OFFSET'?'OFFSET':'NO');
   const ecBtns=document.querySelectorAll('#editCumToggle .toggle-btn');
   ecBtns.forEach(b=>b.classList.remove('ac','ac-danger','ac-ok'));
-  if(editCumValue==='YES'){ ecBtns[1].classList.add('ac-danger'); document.getElementById('editCumCountRow').style.display='block'; document.getElementById('editCount').value=item.count||''; }
-  else if(editCumValue==='OFFSET'){ ecBtns[2].classList.add('ac-ok'); document.getElementById('editCumCountRow').style.display='block'; document.getElementById('editCount').value=item.count||''; }
+  if(editCumValue==='YES'){ ecBtns[1].classList.add('ac-danger'); document.getElementById('editCumCountRow').style.display='block'; }
+  else if(editCumValue==='OFFSET'){ ecBtns[2].classList.add('ac-ok'); document.getElementById('editCumCountRow').style.display='block'; }
   else { ecBtns[0].classList.add('ac'); document.getElementById('editCumCountRow').style.display='none'; }
   document.getElementById('editListWrap').style.display='none';
   document.getElementById('editFormWrap').style.display='block';
@@ -1259,17 +1277,28 @@ async function doUpdateRecord(){
     category: document.getElementById('editCategory').value,
     content: document.getElementById('editContent').value.trim(),
     isCumulative: editCumValue,
-    count: editCumValue!=='NO' ? (document.getElementById('editCount').value.trim()||0) : '',
+    count: editCumValue!=='NO' ? 0 : '', // 실제 값은 아래 renumber에서 날짜순으로 자동 재계산됨
     grade: editTarget.gradeClassNumber.charAt(0),
     className: editTarget.className
   };
-  try{ await updateDoc(doc(db,'records',editTarget.id), payload); showToast('✅ 수정되었습니다.','ok'); closeEditForm(); }
+  try{
+    await updateDoc(doc(db,'records',editTarget.id), payload);
+    await renumberStudentCumRecords(editTarget.gradeClassNumber);
+    showToast('✅ 수정되었습니다. (누적 번호는 날짜순으로 자동 재계산됨)','ok');
+    closeEditForm();
+  }
   catch(e){ showToast('❌ 수정 실패: '+e.message,'err'); }
 }
 async function doDeleteRecord(){
   if(!editTarget){ showToast('⚠️ 삭제할 기록을 선택해 주세요.','err'); return; }
   if(!confirm(`${editTarget.name}(${editTarget.date}) 기록을 삭제하시겠습니까?\n이 작업은 되돌릴 수 없습니다.`)) return;
-  try{ await deleteDoc(doc(db,'records',editTarget.id)); showToast('✅ 삭제되었습니다.','ok'); closeEditForm(); }
+  const num = editTarget.gradeClassNumber;
+  try{
+    await deleteDoc(doc(db,'records',editTarget.id));
+    await renumberStudentCumRecords(num);
+    showToast('✅ 삭제되었습니다. (누적 번호는 날짜순으로 자동 재계산됨)','ok');
+    closeEditForm();
+  }
   catch(e){ showToast('❌ 삭제 실패: '+e.message,'err'); }
 }
 
@@ -1368,11 +1397,10 @@ async function importFullRecords(){
       const content = (cols[6]||'').toString().trim();
       let cum = (cols[7]||'NO').toString().trim().toUpperCase();
       if(!['YES','OFFSET','NO'].includes(cum)) cum='NO';
-      const countRaw = (cols[8]||'').toString().trim();
       records.push({
         gradeClassNumber: num, name, date, period, teacher, category, content,
         isCumulative: cum,
-        count: cum!=='NO' ? (countRaw!==''?parseInt(countRaw,10)||0:null) : '',
+        count: cum!=='NO' ? 0 : '', // 실제 값은 아래에서 날짜순으로 학생별 재계산됨 (원본 I열 숫자는 참고만, 신뢰하지 않음)
         grade: num.charAt(0),
         className: (parseInt(num.substring(1,3),10)||0)+'반',
         importedAt: serverTimestamp()
@@ -1380,19 +1408,6 @@ async function importFullRecords(){
     });
 
     if(!records.length){ showToast('⚠️ 유효한 행이 없습니다 (학번 5자리 확인).','err'); return; }
-
-    // 누적/상쇄 기록의 빈 count는 학생별 날짜·교시 오래된순으로 순차 계산해서 채움
-    const byStudent = {};
-    records.forEach(r=>{ if(r.isCumulative!=='NO'){ (byStudent[r.gradeClassNumber]=byStudent[r.gradeClassNumber]||[]).push(r); } });
-    Object.keys(byStudent).forEach(num=>{
-      const list = byStudent[num].slice().sort((a,b)=> a.date===b.date ? periodIdx(a.period)-periodIdx(b.period) : (a.date<b.date?-1:1));
-      let running = 0;
-      list.forEach(r=>{
-        if(r.count===null){ running = r.isCumulative==='YES' ? running+1 : Math.max(running-1,0); r.count = running; }
-        else { running = r.count; }
-      });
-      byStudent[num] = list; // 정렬된 상태로 갱신 (마지막=최신)
-    });
 
     // Firestore 배치 쓰기 (500개 제한 대비 400개씩 분할)
     let written=0;
@@ -1405,14 +1420,12 @@ async function importFullRecords(){
       btn.textContent = `가져오는 중… (${written}/${records.length})`;
     }
 
-    // 학생별 최종 누적 카운터를 방금 가져온 기록의 최신값으로 자동 갱신
-    const counterBatch = writeBatch(db);
-    Object.keys(byStudent).forEach(num=>{
-      const list = byStudent[num];
-      const last = list[list.length-1];
-      counterBatch.set(doc(db,'studentCounters',num), { count: last.count, name: last.name||'', updatedAt: serverTimestamp() }, { merge:true });
-    });
-    if(Object.keys(byStudent).length) await counterBatch.commit();
+    // 영향받은 학생들의 누적 번호를 날짜순 기준으로 재계산 (saveOneRecordTx와 동일한 로직 재사용)
+    const affected = [...new Set(records.filter(r=>r.isCumulative!=='NO').map(r=>r.gradeClassNumber))];
+    for(let i=0;i<affected.length;i++){
+      btn.textContent = `누적 번호 재계산 중… (${i+1}/${affected.length})`;
+      await renumberStudentCumRecords(affected[i]);
+    }
 
     showToast(`✅ 기록 ${records.length}건 등록 완료`+(skipped?` (건너뜀 ${skipped}건)`:''), 'ok');
     document.getElementById('recordsImportText').value='';
@@ -1421,6 +1434,23 @@ async function importFullRecords(){
   }finally{
     btn.disabled=false; btn.textContent='📥 지난 기록 일괄 등록';
   }
+}
+// ── 관리자: 전체 학생 재계산 (기존에 꼬인 데이터 일괄 정정) ──
+async function recalcAllStudents(){
+  const nums = new Set(Object.keys(nameMap));
+  allRecords.forEach(r=>{ if(r.gradeClassNumber) nums.add(r.gradeClassNumber); });
+  const list = [...nums];
+  if(!list.length){ showToast('⚠️ 대상 학생이 없습니다.','err'); return; }
+  if(!confirm(`전체 학생 ${list.length}명의 누적 번호를 날짜순 기준으로 다시 계산합니다. 계속할까요?`)) return;
+  const btn=document.getElementById('recalcAllBtn'); btn.disabled=true;
+  try{
+    for(let i=0;i<list.length;i++){
+      btn.textContent = `재계산 중… (${i+1}/${list.length})`;
+      await renumberStudentCumRecords(list[i]);
+    }
+    showToast(`✅ 전체 ${list.length}명 재계산 완료`,'ok');
+  }catch(e){ showToast('❌ 재계산 실패: '+e.message,'err'); }
+  finally{ btn.disabled=false; btn.textContent='🔄 전체 학생 누적 번호 다시 계산하기 (날짜순 정합성 맞추기)'; }
 }
 // ── 관리자: 학생명렬 일괄 가져오기 ──
 async function importRoster(){
@@ -1443,20 +1473,41 @@ async function importRoster(){
 // ── 관리자: 누적 초기값 일괄 등록 ──
 async function importCounters(){
   const raw=document.getElementById('counterImportText').value;
+  const baselineDate = document.getElementById('counterBaselineDate').value;
+  if(!baselineDate){ showToast('⚠️ 기준일을 먼저 선택해 주세요.','err'); return; }
   const lines=raw.split('\n').map(l=>l.trim()).filter(Boolean);
   if(!lines.length){ showToast('⚠️ 붙여넣을 내용이 없습니다.','err'); return; }
-  const batch=writeBatch(db); let count=0;
+  const btn=document.getElementById('importCounterBtn'); btn.disabled=true;
+  const entries=[];
   lines.forEach(line=>{
     const parts=line.split(/\t|,/).map(s=>s.trim());
     if(parts.length<2) return;
     const num=parts[0], cnt=parseInt(parts[1],10);
     if(!/^\d{5}$/.test(num) || isNaN(cnt)) return;
-    batch.set(doc(db,'studentCounters',num), { count:cnt, name: nameMap[num]||'', updatedAt: serverTimestamp() }, { merge:true });
-    count++;
+    entries.push({num,cnt});
   });
-  if(!count){ showToast('⚠️ 유효한 줄이 없습니다.','err'); return; }
-  try{ await batch.commit(); showToast(`✅ ${count}명 초기 누적값 등록 완료`,'ok'); document.getElementById('counterImportText').value=''; }
-  catch(e){ showToast('❌ 등록 실패: '+e.message,'err'); }
+  if(!entries.length){ showToast('⚠️ 유효한 줄이 없습니다.','err'); btn.disabled=false; return; }
+  try{
+    // 학번당 기준(anchor) 레코드를 하나씩 생성 (renumber 로직이 이 값을 시작점으로 인식함)
+    const batch=writeBatch(db);
+    entries.forEach(({num,cnt})=>{
+      batch.set(doc(collection(db,'records')), {
+        gradeClassNumber:num, name: nameMap[num]||'', date: baselineDate, period:'기타',
+        teacher:'관리자', category:'이전 시스템 이월', content:'이전 시스템 누적 횟수 이월 (관리자 일괄 등록)',
+        isCumulative:'YES', isBaselineAnchor:true, count: cnt,
+        grade: num.charAt(0), className: (parseInt(num.substring(1,3),10)||0)+'반',
+        importedAt: serverTimestamp()
+      });
+    });
+    await batch.commit();
+    for(let i=0;i<entries.length;i++){
+      btn.textContent = `재계산 중… (${i+1}/${entries.length})`;
+      await renumberStudentCumRecords(entries[i].num);
+    }
+    showToast(`✅ ${entries.length}명 초기 누적값 등록 완료`,'ok');
+    document.getElementById('counterImportText').value='';
+  }catch(e){ showToast('❌ 등록 실패: '+e.message,'err'); }
+  finally{ btn.disabled=false; btn.textContent='📥 누적 초기값 일괄 등록'; }
 }
 // ── 관리자: 외부 계정 승인 관리 ──
 async function addApprovedEmail(){

@@ -4,7 +4,6 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
 <title>동행프로그램 조회 시스템</title>
-<script src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.4.1/papaparse.min.js"></script>
 <style>
 *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 :root {
@@ -518,8 +517,6 @@ body {
       <button class="btn-main" id="recalcAllBtn" style="background:var(--warn);margin-top:0;margin-bottom:16px;">🔄 전체 학생 누적 번호 다시 계산하기 (날짜순 정합성 맞추기)</button>
       <div class="admin-tabs">
         <button class="admin-tab-btn ac" data-admin="roster">학생명렬 가져오기</button>
-        <button class="admin-tab-btn" data-admin="records">지난 기록 가져오기</button>
-        <button class="admin-tab-btn" data-admin="counter">누적 초기값 입력</button>
         <button class="admin-tab-btn" data-admin="approve">외부 계정 승인</button>
       </div>
       <div class="admin-panel active" id="admin-roster">
@@ -527,22 +524,6 @@ body {
         <textarea id="rosterImportText" style="width:100%;min-height:160px;padding:10px;border:1.5px solid var(--gray2);border-radius:var(--radius-sm);font-family:monospace;font-size:13px;" placeholder="10101	김철수
 10102	이영희"></textarea>
         <button class="btn-main ok" id="importRosterBtn">📥 학생명렬 일괄 등록</button>
-      </div>
-      <div class="admin-panel" id="admin-records">
-        <div class="hint" style="margin-bottom:10px;">
-          구글시트에서 <b>학번, 이름, 날짜, 교시, 담당교사, 유형, 내용, 누적여부, 누적횟수</b> 9개 열 전체를 순서 그대로 복사해서 붙여넣으세요 (헤더 행은 빼고 데이터 행만).<br>
-          누적횟수 칸은 비워두면 학생별로 날짜순 자동 재계산됩니다. 누적여부는 YES/NO/OFFSET만 인식합니다.<br>
-          <b style="color:var(--danger)">⚠️ 되돌릴 수 없고, 같은 내용을 두 번 붙여넣으면 기록이 중복 저장되니 한 번만 실행하세요.</b>
-        </div>
-        <textarea id="recordsImportText" style="width:100%;min-height:200px;padding:10px;border:1.5px solid var(--gray2);border-radius:var(--radius-sm);font-family:monospace;font-size:12px;" placeholder="10101	김철수	2026-03-05	1교시	김선생	복장불량	교복 셔츠 미착용	NO	"></textarea>
-        <button class="btn-main ok" id="importRecordsBtn">📥 지난 기록 일괄 등록</button>
-      </div>
-      <div class="admin-panel" id="admin-counter">
-        <div class="hint" style="margin-bottom:10px;">한 줄에 "학번[탭 또는 콤마]현재누적횟수" 형식으로 붙여넣으세요. 위 "지난 기록 가져오기"를 이미 하셨다면 이 도구는 필요 없습니다 (자동 계산됨). 기록 내용 없이 숫자만 옮기고 싶을 때만 사용하세요.</div>
-        <div class="field" style="margin-bottom:10px;max-width:220px;"><label>기준일 (이 날짜부터 이어서 계산됩니다)</label><input type="date" id="counterBaselineDate"></div>
-        <textarea id="counterImportText" style="width:100%;min-height:160px;padding:10px;border:1.5px solid var(--gray2);border-radius:var(--radius-sm);font-family:monospace;font-size:13px;" placeholder="10101	3
-10102	0"></textarea>
-        <button class="btn-main ok" id="importCounterBtn">📥 누적 초기값 일괄 등록</button>
       </div>
       <div class="admin-panel" id="admin-approve">
         <div class="hint" style="margin-bottom:10px;">경기도교육청 계정이 아닌 개인 Google 계정을 개별 승인합니다.</div>
@@ -733,8 +714,6 @@ function initUiOnce(){
     b.classList.add('ac'); document.getElementById('admin-'+b.dataset.admin).classList.add('active');
   }));
   document.getElementById('importRosterBtn').addEventListener('click', importRoster);
-  document.getElementById('importRecordsBtn').addEventListener('click', importFullRecords);
-  document.getElementById('importCounterBtn').addEventListener('click', importCounters);
   document.getElementById('recalcAllBtn').addEventListener('click', recalcAllStudents);
   document.getElementById('addApprovedBtn').addEventListener('click', addApprovedEmail);
 }
@@ -1356,102 +1335,6 @@ function refreshActiveViews(){
   refreshStudentSearchIfActive();
 }
 
-// ── 관리자: 지난 기록(전체 필드) 일괄 가져오기 ──
-function pad2(v){ return String(v).padStart(2,'0'); }
-function normalizeDateStrClient(raw){
-  if(!raw) return '';
-  const s = raw.toString().trim();
-  if(!s) return '';
-  let m;
-  m = /^(\d{4})-(\d{1,2})-(\d{1,2})/.exec(s);
-  if(m) return `${m[1]}-${pad2(m[2])}-${pad2(m[3])}`;
-  m = /^(\d{4})[.\/]\s*(\d{1,2})[.\/]\s*(\d{1,2})/.exec(s);
-  if(m) return `${m[1]}-${pad2(m[2])}-${pad2(m[3])}`;
-  m = /^(\d{1,2})[.\/](\d{1,2})[.\/](\d{4})/.exec(s);
-  if(m) return `${m[3]}-${pad2(m[1])}-${pad2(m[2])}`;
-  const d = new Date(s);
-  if(!isNaN(d.getTime())) return `${d.getFullYear()}-${pad2(d.getMonth()+1)}-${pad2(d.getDate())}`;
-  return s; // 인식 실패 시 원본 유지 (정렬에서 맨 뒤로 밀림)
-}
-async function importFullRecords(){
-  const raw = document.getElementById('recordsImportText').value;
-  if(!raw.trim()){ showToast('⚠️ 붙여넣을 내용이 없습니다.','err'); return; }
-  if(typeof Papa === 'undefined'){ showToast('❌ 파싱 라이브러리(PapaParse)를 불러오지 못했습니다.','err'); return; }
-  const btn = document.getElementById('importRecordsBtn');
-  btn.disabled = true; btn.textContent = '가져오는 중…';
-  try{
-    const parsed = Papa.parse(raw.trim(), { delimiter:'\t', skipEmptyLines:true });
-    const rows = parsed.data || [];
-
-    const records = [];
-    let skipped = 0;
-    rows.forEach(cols=>{
-      if(!cols || cols.length < 7){ skipped++; return; }
-      const num = (cols[0]||'').toString().trim();
-      if(!/^\d{5}$/.test(num)){ skipped++; return; }
-      const name = (cols[1]||'').toString().trim();
-      const date = normalizeDateStrClient((cols[2]||'').toString());
-      const period = (cols[3]||'').toString().trim();
-      const teacher = (cols[4]||'').toString().trim();
-      const category = (cols[5]||'').toString().trim();
-      const content = (cols[6]||'').toString().trim();
-      let cum = (cols[7]||'NO').toString().trim().toUpperCase();
-      if(!['YES','OFFSET','NO'].includes(cum)) cum='NO';
-      records.push({
-        gradeClassNumber: num, name, date, period, teacher, category, content,
-        isCumulative: cum,
-        count: cum!=='NO' ? 0 : '', // 실제 값은 아래에서 날짜순으로 학생별 재계산됨 (원본 I열 숫자는 참고만, 신뢰하지 않음)
-        grade: num.charAt(0),
-        className: (parseInt(num.substring(1,3),10)||0)+'반',
-        importedAt: serverTimestamp()
-      });
-    });
-
-    if(!records.length){ showToast('⚠️ 유효한 행이 없습니다 (학번 5자리 확인).','err'); return; }
-
-    // Firestore 배치 쓰기 (500개 제한 대비 400개씩 분할)
-    let written=0;
-    for(let i=0;i<records.length;i+=400){
-      const chunk = records.slice(i,i+400);
-      const batch = writeBatch(db);
-      chunk.forEach(r=> batch.set(doc(collection(db,'records')), r));
-      await batch.commit();
-      written += chunk.length;
-      btn.textContent = `가져오는 중… (${written}/${records.length})`;
-    }
-
-    // 영향받은 학생들의 누적 번호를 날짜순 기준으로 재계산 (saveOneRecordTx와 동일한 로직 재사용)
-    const affected = [...new Set(records.filter(r=>r.isCumulative!=='NO').map(r=>r.gradeClassNumber))];
-    for(let i=0;i<affected.length;i++){
-      btn.textContent = `누적 번호 재계산 중… (${i+1}/${affected.length})`;
-      await renumberStudentCumRecords(affected[i]);
-    }
-
-    showToast(`✅ 기록 ${records.length}건 등록 완료`+(skipped?` (건너뜀 ${skipped}건)`:''), 'ok');
-    document.getElementById('recordsImportText').value='';
-  }catch(e){
-    showToast('❌ 가져오기 실패: '+e.message,'err');
-  }finally{
-    btn.disabled=false; btn.textContent='📥 지난 기록 일괄 등록';
-  }
-}
-// ── 관리자: 전체 학생 재계산 (기존에 꼬인 데이터 일괄 정정) ──
-async function recalcAllStudents(){
-  const nums = new Set(Object.keys(nameMap));
-  allRecords.forEach(r=>{ if(r.gradeClassNumber) nums.add(r.gradeClassNumber); });
-  const list = [...nums];
-  if(!list.length){ showToast('⚠️ 대상 학생이 없습니다.','err'); return; }
-  if(!confirm(`전체 학생 ${list.length}명의 누적 번호를 날짜순 기준으로 다시 계산합니다. 계속할까요?`)) return;
-  const btn=document.getElementById('recalcAllBtn'); btn.disabled=true;
-  try{
-    for(let i=0;i<list.length;i++){
-      btn.textContent = `재계산 중… (${i+1}/${list.length})`;
-      await renumberStudentCumRecords(list[i]);
-    }
-    showToast(`✅ 전체 ${list.length}명 재계산 완료`,'ok');
-  }catch(e){ showToast('❌ 재계산 실패: '+e.message,'err'); }
-  finally{ btn.disabled=false; btn.textContent='🔄 전체 학생 누적 번호 다시 계산하기 (날짜순 정합성 맞추기)'; }
-}
 // ── 관리자: 학생명렬 일괄 가져오기 ──
 async function importRoster(){
   const raw=document.getElementById('rosterImportText').value;
@@ -1469,45 +1352,6 @@ async function importRoster(){
   if(!count){ showToast('⚠️ 유효한 줄이 없습니다 (학번 5자리 확인).','err'); return; }
   try{ await batch.commit(); showToast(`✅ 학생 ${count}명 등록 완료`,'ok'); document.getElementById('rosterImportText').value=''; }
   catch(e){ showToast('❌ 등록 실패: '+e.message,'err'); }
-}
-// ── 관리자: 누적 초기값 일괄 등록 ──
-async function importCounters(){
-  const raw=document.getElementById('counterImportText').value;
-  const baselineDate = document.getElementById('counterBaselineDate').value;
-  if(!baselineDate){ showToast('⚠️ 기준일을 먼저 선택해 주세요.','err'); return; }
-  const lines=raw.split('\n').map(l=>l.trim()).filter(Boolean);
-  if(!lines.length){ showToast('⚠️ 붙여넣을 내용이 없습니다.','err'); return; }
-  const btn=document.getElementById('importCounterBtn'); btn.disabled=true;
-  const entries=[];
-  lines.forEach(line=>{
-    const parts=line.split(/\t|,/).map(s=>s.trim());
-    if(parts.length<2) return;
-    const num=parts[0], cnt=parseInt(parts[1],10);
-    if(!/^\d{5}$/.test(num) || isNaN(cnt)) return;
-    entries.push({num,cnt});
-  });
-  if(!entries.length){ showToast('⚠️ 유효한 줄이 없습니다.','err'); btn.disabled=false; return; }
-  try{
-    // 학번당 기준(anchor) 레코드를 하나씩 생성 (renumber 로직이 이 값을 시작점으로 인식함)
-    const batch=writeBatch(db);
-    entries.forEach(({num,cnt})=>{
-      batch.set(doc(collection(db,'records')), {
-        gradeClassNumber:num, name: nameMap[num]||'', date: baselineDate, period:'기타',
-        teacher:'관리자', category:'이전 시스템 이월', content:'이전 시스템 누적 횟수 이월 (관리자 일괄 등록)',
-        isCumulative:'YES', isBaselineAnchor:true, count: cnt,
-        grade: num.charAt(0), className: (parseInt(num.substring(1,3),10)||0)+'반',
-        importedAt: serverTimestamp()
-      });
-    });
-    await batch.commit();
-    for(let i=0;i<entries.length;i++){
-      btn.textContent = `재계산 중… (${i+1}/${entries.length})`;
-      await renumberStudentCumRecords(entries[i].num);
-    }
-    showToast(`✅ ${entries.length}명 초기 누적값 등록 완료`,'ok');
-    document.getElementById('counterImportText').value='';
-  }catch(e){ showToast('❌ 등록 실패: '+e.message,'err'); }
-  finally{ btn.disabled=false; btn.textContent='📥 누적 초기값 일괄 등록'; }
 }
 // ── 관리자: 외부 계정 승인 관리 ──
 async function addApprovedEmail(){

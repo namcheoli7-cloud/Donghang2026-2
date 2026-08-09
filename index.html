@@ -1245,8 +1245,10 @@ function renderModalBody(){
 
 // ── 기록 수정·삭제 모달 ──
 let editSorted=[], editPage=1, editTarget=null, editCumValue='NO';
+let editEntryMode='list'; // 'list' = 🔧 버튼으로 목록부터 진입 / 'inline' = 기록 카드 ✏️로 바로 진입
 const EDIT_PAGE_SIZE=15;
 function openEditModal(){
+  editEntryMode='list';
   editSorted=allRecords.slice().sort(sortDesc); editPage=1; renderEditList();
   document.getElementById('editListWrap').style.display='block';
   document.getElementById('editFormWrap').style.display='none';
@@ -1296,13 +1298,32 @@ function openEditForm(item){
   document.getElementById('editModal').scrollTop=0;
 }
 function openEditFromCard(item){
+  editEntryMode='inline';
   editSorted=allRecords.slice().sort(sortDesc); editPage=1;
   document.getElementById('editListWrap').style.display='none';
   document.getElementById('editFormWrap').style.display='block';
   document.getElementById('editModal').classList.add('open'); document.getElementById('editModal').scrollTop=0;
   openEditForm(item);
 }
-function closeEditForm(){ document.getElementById('editFormWrap').style.display='none'; document.getElementById('editListWrap').style.display='block'; renderEditList(); document.getElementById('editModal').scrollTop=0; editTarget=null; }
+// "← 목록으로" 버튼: 항상 최신 데이터로 목록을 다시 그려서 보여줌
+function closeEditForm(){
+  editSorted=allRecords.slice().sort(sortDesc); editPage=1;
+  document.getElementById('editFormWrap').style.display='none';
+  document.getElementById('editListWrap').style.display='block';
+  renderEditList();
+  document.getElementById('editModal').scrollTop=0;
+  editTarget=null;
+}
+// 저장/삭제 "완료" 후 호출: ✏️ 아이콘으로 바로 들어온 경우엔 모달을 통째로 닫아 원래 화면(학년별 조회 등)으로 돌아가고,
+// 🔧 버튼으로 목록부터 훑던 중이었다면 최신 목록으로 돌아감
+function finishEditAction(){
+  if(editEntryMode==='inline'){
+    document.getElementById('editModal').classList.remove('open');
+    editTarget=null;
+  } else {
+    closeEditForm();
+  }
+}
 function setEditCum(val,el){
   editCumValue=val;
   document.querySelectorAll('#editCumToggle .toggle-btn').forEach(b=>b.classList.remove('ac','ac-danger','ac-ok'));
@@ -1329,7 +1350,7 @@ async function doUpdateRecord(){
     await updateDoc(doc(db,'records',editTarget.id), payload);
     await renumberStudentCumRecords(editTarget.gradeClassNumber);
     showToast('✅ 수정되었습니다. (누적 번호는 날짜순으로 자동 재계산됨)','ok');
-    closeEditForm();
+    finishEditAction();
   }
   catch(e){ showToast('❌ 수정 실패: '+e.message,'err'); }
 }
@@ -1341,7 +1362,7 @@ async function doDeleteRecord(){
     await deleteDoc(doc(db,'records',editTarget.id));
     await renumberStudentCumRecords(num);
     showToast('✅ 삭제되었습니다. (누적 번호는 날짜순으로 자동 재계산됨)','ok');
-    closeEditForm();
+    finishEditAction();
   }
   catch(e){ showToast('❌ 삭제 실패: '+e.message,'err'); }
 }

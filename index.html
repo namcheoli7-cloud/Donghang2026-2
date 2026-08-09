@@ -323,8 +323,6 @@ body {
             <label>유형 <span class="req">*</span></label>
             <select id="inCategory">
               <option value="">선택</option>
-              <option>칭찬</option>
-              <option>복장불량</option><option>수업준비 미흡</option><option>조회지각</option><option>분리지도</option><option>급식질서 위반</option><option>공공질서 위반</option><option>교육활동 침해</option><option>기타</option>
             </select>
             <div class="error-msg">유형을 선택해 주세요.</div>
           </div>
@@ -453,8 +451,7 @@ body {
               <div class="field"><label>담당교사</label><input type="text" id="editTeacher"></div>
               <div class="field"><label>유형</label>
                 <select id="editCategory">
-                  <option value="">선택</option><option>칭찬</option>
-                  <option>복장불량</option><option>수업준비 미흡</option><option>조회지각</option><option>분리지도</option><option>급식질서 위반</option><option>공공질서 위반</option><option>교육활동 침해</option><option>기타</option>
+                  <option value="">선택</option>
                 </select>
               </div>
             </div>
@@ -510,16 +507,50 @@ body {
     </div>
   </div>
 
+  <!-- 관리자 비밀번호 게이트 -->
+  <div class="modal-wrap" id="adminPassModal">
+    <div class="modal-header"><button class="modal-close" id="adminPassCloseBtn">✕ 닫기</button><span class="modal-title">🔒 관리자 인증</span></div>
+    <div class="modal-body">
+      <div class="field"><label>관리자 비밀번호</label><input type="password" id="adminPassInput" placeholder="••••" inputmode="numeric" autocomplete="off"></div>
+      <button class="btn-main ok" id="adminPassSubmitBtn">확인</button>
+    </div>
+  </div>
+
   <!-- 관리자 설정 모달 -->
   <div class="modal-wrap" id="adminModal">
     <div class="modal-header"><button class="modal-close" id="adminCloseBtn">✕ 닫기</button><span class="modal-title">⚙️ 관리자 설정</span></div>
     <div class="modal-body">
       <button class="btn-main" id="recalcAllBtn" style="background:var(--warn);margin-top:0;margin-bottom:16px;">🔄 전체 학생 누적 번호 다시 계산하기 (날짜순 정합성 맞추기)</button>
       <div class="admin-tabs">
-        <button class="admin-tab-btn ac" data-admin="roster">학생명렬 가져오기</button>
+        <button class="admin-tab-btn ac" data-admin="basic">기본 설정</button>
+        <button class="admin-tab-btn" data-admin="roster">학생명렬 가져오기</button>
         <button class="admin-tab-btn" data-admin="approve">외부 계정 승인</button>
       </div>
-      <div class="admin-panel active" id="admin-roster">
+      <div class="admin-panel active" id="admin-basic">
+        <div class="card-header" style="padding:0;background:none;border:none;font-size:13px;font-weight:800;color:var(--gray4);margin-bottom:8px;">📚 생활지도 유형 관리</div>
+        <div class="hint" style="margin-bottom:8px;">체크된 유형은 기록 카드에서 빨간색으로 강조 표시됩니다 (예: 교육활동 침해 등 심각 유형).</div>
+        <div id="categoryManageList" style="margin-bottom:12px;"></div>
+        <div style="display:flex;gap:8px;margin-bottom:20px;">
+          <input type="text" id="newCategoryInput" placeholder="새 유형 이름" style="flex:1;padding:9px 11px;border:1.5px solid var(--gray2);border-radius:var(--radius-sm);">
+          <button class="btn-save-teacher" id="addCategoryBtn">➕ 추가</button>
+        </div>
+        <hr class="divider">
+        <div class="card-header" style="padding:0;background:none;border:none;font-size:13px;font-weight:800;color:var(--gray4);margin:16px 0 8px;">⏰ 교시 목록 관리</div>
+        <div id="periodManageList" style="margin-bottom:12px;"></div>
+        <div style="display:flex;gap:8px;margin-bottom:20px;">
+          <input type="text" id="newPeriodInput" placeholder="새 교시 이름 (예: 8교시)" style="flex:1;padding:9px 11px;border:1.5px solid var(--gray2);border-radius:var(--radius-sm);">
+          <button class="btn-save-teacher" id="addPeriodBtn">➕ 추가</button>
+        </div>
+        <hr class="divider">
+        <div class="card-header" style="padding:0;background:none;border:none;font-size:13px;font-weight:800;color:var(--gray4);margin:16px 0 8px;">🏫 학년별 학급 수</div>
+        <div class="form-row" style="grid-template-columns:1fr 1fr 1fr;">
+          <div class="field"><label>1학년</label><input type="number" id="classCount1" min="1" max="30"></div>
+          <div class="field"><label>2학년</label><input type="number" id="classCount2" min="1" max="30"></div>
+          <div class="field"><label>3학년</label><input type="number" id="classCount3" min="1" max="30"></div>
+        </div>
+        <button class="btn-main ok" id="saveClassCountsBtn">💾 학급 수 저장</button>
+      </div>
+      <div class="admin-panel" id="admin-roster">
         <div class="hint" style="margin-bottom:10px;">한 줄에 "학번[탭 또는 콤마]이름" 형식으로 붙여넣으세요. (엑셀에서 두 칸 복사해서 그대로 붙여넣기 가능)</div>
         <textarea id="rosterImportText" style="width:100%;min-height:160px;padding:10px;border:1.5px solid var(--gray2);border-radius:var(--radius-sm);font-family:monospace;font-size:13px;" placeholder="10101	김철수
 10102	이영희"></textarea>
@@ -596,6 +627,14 @@ onAuthStateChanged(auth, (user) => {
   attachListeners();
 });
 
+// ── 관리자 설정 가능한 기본값 (유형/교시/학급수) ──
+const DEFAULT_CATEGORIES = ['칭찬','복장불량','수업준비 미흡','조회지각','분리지도','급식질서 위반','공공질서 위반','교육활동 침해','기타'];
+const DEFAULT_PERIODS = ['조회전','조회','1교시','2교시','3교시','4교시','점심','5교시','6교시','7교시','종례','종례후','방과후','기타'];
+const DEFAULT_CLASS_COUNTS = {'1':12,'2':10,'3':12};
+const DEFAULT_DANGER = ['교육활동 침해','분리지도'];
+let appSettings = { categories:DEFAULT_CATEGORIES.slice(), periods:DEFAULT_PERIODS.slice(), classCounts:{...DEFAULT_CLASS_COUNTS}, dangerCategories:DEFAULT_DANGER.slice() };
+let settingsReady = false;
+
 function attachListeners(){
   let firstRecordsSnap = true;
   const recordsRef = collection(db,'records');
@@ -615,6 +654,22 @@ function attachListeners(){
     const m={}; snap.forEach(d=>{ m[d.id]=d.data().count||0; });
     counterMap=m; dataReady.counters=true;
     refreshActiveViews();
+  }, (err)=> handlePermissionError(err)));
+
+  unsub.push(onSnapshot(doc(db,'settings','config'), async (snap)=>{
+    if(snap.exists()){
+      const d=snap.data();
+      appSettings = {
+        categories: Array.isArray(d.categories)&&d.categories.length ? d.categories : DEFAULT_CATEGORIES.slice(),
+        periods: Array.isArray(d.periods)&&d.periods.length ? d.periods : DEFAULT_PERIODS.slice(),
+        classCounts: d.classCounts && Object.keys(d.classCounts).length ? d.classCounts : {...DEFAULT_CLASS_COUNTS},
+        dangerCategories: Array.isArray(d.dangerCategories) ? d.dangerCategories : DEFAULT_DANGER.slice()
+      };
+    } else {
+      try{ await setDoc(doc(db,'settings','config'), { categories:DEFAULT_CATEGORIES, periods:DEFAULT_PERIODS, classCounts:DEFAULT_CLASS_COUNTS, dangerCategories:DEFAULT_DANGER }); }catch(e){}
+    }
+    settingsReady = true;
+    applySettingsToUI();
   }, (err)=> handlePermissionError(err)));
 }
 
@@ -706,7 +761,10 @@ function initUiOnce(){
   document.getElementById('printCloseBtn').addEventListener('click', ()=>document.getElementById('printModal').classList.remove('open'));
   document.getElementById('doPrintBtn').addEventListener('click', doPrint);
 
-  document.getElementById('adminModalBtn').addEventListener('click', ()=>document.getElementById('adminModal').classList.add('open'));
+  document.getElementById('adminModalBtn').addEventListener('click', openAdminGate);
+  document.getElementById('adminPassCloseBtn').addEventListener('click', ()=>document.getElementById('adminPassModal').classList.remove('open'));
+  document.getElementById('adminPassSubmitBtn').addEventListener('click', submitAdminPass);
+  document.getElementById('adminPassInput').addEventListener('keydown', e=>{ if(e.key==='Enter'){ e.preventDefault(); submitAdminPass(); } });
   document.getElementById('adminCloseBtn').addEventListener('click', ()=>document.getElementById('adminModal').classList.remove('open'));
   document.querySelectorAll('.admin-tab-btn').forEach(b=> b.addEventListener('click', ()=>{
     document.querySelectorAll('.admin-tab-btn').forEach(x=>x.classList.remove('ac'));
@@ -716,13 +774,17 @@ function initUiOnce(){
   document.getElementById('importRosterBtn').addEventListener('click', importRoster);
   document.getElementById('recalcAllBtn').addEventListener('click', recalcAllStudents);
   document.getElementById('addApprovedBtn').addEventListener('click', addApprovedEmail);
+  document.getElementById('addCategoryBtn').addEventListener('click', addCategory);
+  document.getElementById('newCategoryInput').addEventListener('keydown', e=>{ if(e.key==='Enter'){ e.preventDefault(); addCategory(); } });
+  document.getElementById('addPeriodBtn').addEventListener('click', addPeriod);
+  document.getElementById('newPeriodInput').addEventListener('keydown', e=>{ if(e.key==='Enter'){ e.preventDefault(); addPeriod(); } });
+  document.getElementById('saveClassCountsBtn').addEventListener('click', saveClassCounts);
 }
 
-// ── 교시 칩 ──
-const PERIOD_OPTIONS = ['조회전','조회','1교시','2교시','3교시','4교시','점심','5교시','6교시','7교시','종례','종례후','방과후','기타'];
+// ── 교시 칩 (appSettings.periods 기반, 관리자 설정에서 편집 가능) ──
 function buildPeriodChips(containerId, hiddenId){
-  document.getElementById(containerId).innerHTML = PERIOD_OPTIONS.map(p=>
-    `<button type="button" class="period-chip" data-val="${p}">${p}</button>`).join('');
+  document.getElementById(containerId).innerHTML = appSettings.periods.map(p=>
+    `<button type="button" class="period-chip" data-val="${esc(p)}">${esc(p)}</button>`).join('');
   document.getElementById(containerId).querySelectorAll('.period-chip').forEach(b=>{
     b.addEventListener('click', ()=>selectPeriodChip(containerId,hiddenId,b.dataset.val));
   });
@@ -732,19 +794,23 @@ function selectPeriodChip(containerId,hiddenId,val){
   document.querySelectorAll('#'+containerId+' .period-chip').forEach(b=>b.classList.toggle('ac', b.dataset.val===val));
   const fw=document.getElementById('field-'+hiddenId); if(fw) fw.classList.remove('has-error');
 }
-const PERIOD_ORDER=['조회전','조회','1','2','3','4','점심','5','6','7','종례','종례후','방과후','기타'];
-function periodIdx(p){ if(!p) return 99; const key=p.replace(/\s*\(.*\)/,'').trim().replace(/교시$/,'').trim(); const i=PERIOD_ORDER.indexOf(key); return i===-1?99:i; }
+function periodIdx(p){
+  if(!p) return 999;
+  const key = p.toString().replace(/\s*\(.*\)/,'').trim();
+  const i = appSettings.periods.indexOf(key);
+  return i===-1?999:i;
+}
 
 // ── 정렬 (문자열 yyyy-MM-dd 이므로 안전하게 직접 비교) ──
 function sortDesc(a,b){ if(a.date!==b.date) return a.date<b.date?1:-1; return periodIdx(b.period)-periodIdx(a.period); }
 function sortAsc(a,b){ return sortDesc(b,a); }
 
-// ── 클래스/학년 칩 ──
-const CLASS_MAP={'1':12,'2':10,'3':12};
+// ── 클래스/학년 칩 (appSettings.classCounts 기반) ──
 function buildClassGrids(){
   ['1','2','3'].forEach(g=>{
     let html='';
-    for(let c=1;c<=CLASS_MAP[g];c++) html+=`<button class="class-chip" data-grade="${g}" data-cls="${c}">${c}반</button>`;
+    const n = parseInt(appSettings.classCounts[g],10) || 1;
+    for(let c=1;c<=n;c++) html+=`<button class="class-chip" data-grade="${g}" data-cls="${c}">${c}반</button>`;
     document.getElementById('grid'+g).innerHTML=html;
     document.getElementById('grid'+g).querySelectorAll('.class-chip').forEach(b=>{
       b.addEventListener('click', ()=>selectClass(b.dataset.grade,b.dataset.cls,b));
@@ -898,7 +964,6 @@ function getStep(cnt){
   return {label:`생활교육위원회 (${cnt}회)`,cls:'step-6'};
 }
 function cntColorCls(cnt){ if(cnt<=0)return'c0';if(cnt<=2)return'c1';if(cnt===3)return'c3';if(cnt===4)return'c4';if(cnt===5)return'c5';return'c6'; }
-const DANGER_CATS=['교육활동 침해','분리지도'];
 
 // ── 저장 (Firestore 트랜잭션으로 동시성 안전) ──
 // 학생 한 명의 누적/상쇄 기록 전체를 '날짜(교시) 순서'대로 다시 훑어서 count를 재계산하고
@@ -990,7 +1055,7 @@ function resetInputForm(){
 // ── 기록 카드 ──
 function recordCard(item){
   const isCum=item.isCumulative==='YES', isOffset=item.isCumulative==='OFFSET';
-  const sev=DANGER_CATS.includes(item.category);
+  const sev=appSettings.dangerCategories.includes(item.category);
   const classLabel=`${item.grade}학년 ${item.className}`;
   const cumBadge = isCum ? `<span class="badge badge-cum-yes">동행 누적${item.count!==''&&item.count!==undefined?' · '+item.count+'회':''}</span>`
     : isOffset ? `<span class="badge badge-cum-offset">상쇄${item.count!==''&&item.count!==undefined?' · '+item.count+'회':''}</span>`
@@ -1194,7 +1259,7 @@ function renderEditList(){
   const start=(editPage-1)*EDIT_PAGE_SIZE;
   const items=editSorted.slice(start,start+EDIT_PAGE_SIZE);
   el.innerHTML=items.map(item=>{
-    const isCum=item.isCumulative==='YES', sev=DANGER_CATS.includes(item.category);
+    const isCum=item.isCumulative==='YES', sev=appSettings.dangerCategories.includes(item.category);
     return `<div class="edit-rec-card${isCum?' highlight':''}" data-editid="${item.id}">
       <div class="rec-badges" style="margin-bottom:5px">
         <span class="badge badge-class">${esc(item.grade+'학년 '+item.className)}</span>
@@ -1371,6 +1436,94 @@ function renderApprovedListLive(){
       try{ await deleteDoc(doc(db,'approvedUsers',b.dataset.rmemail)); showToast('✅ 승인 취소됨','ok'); } catch(e){ showToast('❌ 실패: '+e.message,'err'); }
     }));
   });
+}
+
+// ── 관리자 비밀번호 게이트 (간단한 오조작 방지용 — 실제 데이터 보안은 Firestore 규칙이 담당) ──
+const ADMIN_PASSWORD = '2456';
+function openAdminGate(){
+  document.getElementById('adminPassInput').value='';
+  document.getElementById('adminPassModal').classList.add('open');
+  setTimeout(()=>document.getElementById('adminPassInput').focus(), 50);
+}
+function submitAdminPass(){
+  const val=document.getElementById('adminPassInput').value.trim();
+  if(val===ADMIN_PASSWORD){
+    document.getElementById('adminPassModal').classList.remove('open');
+    document.getElementById('adminModal').classList.add('open');
+  } else {
+    showToast('❌ 비밀번호가 올바르지 않습니다.','err');
+    document.getElementById('adminPassInput').value='';
+    document.getElementById('adminPassInput').focus();
+  }
+}
+
+// ── 기본 설정(유형/교시/학급수) 화면 반영 ──
+function applySettingsToUI(){
+  rebuildCategorySelect('inCategory');
+  rebuildCategorySelect('editCategory');
+  buildPeriodChips('inPeriodChips','inPeriod');
+  buildPeriodChips('editPeriodChips','editPeriod');
+  buildClassGrids();
+  renderCategoryManageList();
+  renderPeriodManageList();
+  ['1','2','3'].forEach(g=>{ const el=document.getElementById('classCount'+g); if(el) el.value = appSettings.classCounts[g]||1; });
+}
+function rebuildCategorySelect(selectId){
+  const sel=document.getElementById(selectId); if(!sel) return;
+  const current=sel.value;
+  sel.innerHTML='<option value="">선택</option>'+appSettings.categories.map(c=>`<option>${esc(c)}</option>`).join('');
+  if(appSettings.categories.includes(current)) sel.value=current;
+}
+function renderCategoryManageList(){
+  const wrap=document.getElementById('categoryManageList'); if(!wrap) return;
+  wrap.innerHTML = appSettings.categories.map(c=>{
+    const isDanger = appSettings.dangerCategories.includes(c);
+    return `<div class="approved-row"><label style="display:flex;align-items:center;gap:8px;cursor:pointer;flex:1;"><input type="checkbox" data-dangercat="${esc(c)}" ${isDanger?'checked':''}> ${esc(c)}</label><button data-rmcat="${esc(c)}">삭제</button></div>`;
+  }).join('');
+  wrap.querySelectorAll('[data-rmcat]').forEach(b=> b.addEventListener('click', ()=>removeCategory(b.dataset.rmcat)));
+  wrap.querySelectorAll('[data-dangercat]').forEach(cb=> cb.addEventListener('change', ()=>toggleDanger(cb.dataset.dangercat, cb.checked)));
+}
+async function addCategory(){
+  const val=document.getElementById('newCategoryInput').value.trim();
+  if(!val){ showToast('⚠️ 유형 이름을 입력해 주세요.','err'); return; }
+  if(appSettings.categories.includes(val)){ showToast('⚠️ 이미 있는 유형입니다.','err'); return; }
+  try{ await updateDoc(doc(db,'settings','config'), { categories:[...appSettings.categories, val] }); document.getElementById('newCategoryInput').value=''; showToast('✅ 추가되었습니다.','ok'); }
+  catch(e){ showToast('❌ 실패: '+e.message,'err'); }
+}
+async function removeCategory(cat){
+  if(!confirm(`"${cat}" 유형을 목록에서 삭제할까요? 이미 저장된 기록에는 영향 없습니다.`)) return;
+  try{ await updateDoc(doc(db,'settings','config'), { categories: appSettings.categories.filter(c=>c!==cat), dangerCategories: appSettings.dangerCategories.filter(c=>c!==cat) }); showToast('✅ 삭제되었습니다.','ok'); }
+  catch(e){ showToast('❌ 실패: '+e.message,'err'); }
+}
+async function toggleDanger(cat, checked){
+  let next=appSettings.dangerCategories.slice();
+  if(checked && !next.includes(cat)) next.push(cat);
+  if(!checked) next=next.filter(c=>c!==cat);
+  try{ await updateDoc(doc(db,'settings','config'), { dangerCategories: next }); }
+  catch(e){ showToast('❌ 실패: '+e.message,'err'); }
+}
+function renderPeriodManageList(){
+  const wrap=document.getElementById('periodManageList'); if(!wrap) return;
+  wrap.innerHTML = appSettings.periods.map(p=>`<div class="approved-row"><span>${esc(p)}</span><button data-rmperiod="${esc(p)}">삭제</button></div>`).join('');
+  wrap.querySelectorAll('[data-rmperiod]').forEach(b=> b.addEventListener('click', ()=>removePeriod(b.dataset.rmperiod)));
+}
+async function addPeriod(){
+  const val=document.getElementById('newPeriodInput').value.trim();
+  if(!val){ showToast('⚠️ 교시 이름을 입력해 주세요.','err'); return; }
+  if(appSettings.periods.includes(val)){ showToast('⚠️ 이미 있는 교시입니다.','err'); return; }
+  try{ await updateDoc(doc(db,'settings','config'), { periods:[...appSettings.periods, val] }); document.getElementById('newPeriodInput').value=''; showToast('✅ 추가되었습니다.','ok'); }
+  catch(e){ showToast('❌ 실패: '+e.message,'err'); }
+}
+async function removePeriod(p){
+  if(!confirm(`"${p}"를 교시 목록에서 삭제할까요?`)) return;
+  try{ await updateDoc(doc(db,'settings','config'), { periods: appSettings.periods.filter(x=>x!==p) }); showToast('✅ 삭제되었습니다.','ok'); }
+  catch(e){ showToast('❌ 실패: '+e.message,'err'); }
+}
+async function saveClassCounts(){
+  const counts={};
+  ['1','2','3'].forEach(g=>{ const v=parseInt(document.getElementById('classCount'+g).value,10); counts[g]= (isNaN(v)||v<1) ? 1 : v; });
+  try{ await updateDoc(doc(db,'settings','config'), { classCounts: counts }); showToast('✅ 학급 수가 저장되었습니다.','ok'); }
+  catch(e){ showToast('❌ 실패: '+e.message,'err'); }
 }
 </script>
 </body>

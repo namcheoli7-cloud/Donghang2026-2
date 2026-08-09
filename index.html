@@ -1400,6 +1400,23 @@ function refreshActiveViews(){
   refreshStudentSearchIfActive();
 }
 
+// ── 관리자: 전체 학생 재계산 (기존에 꼬인 데이터 일괄 정정) ──
+async function recalcAllStudents(){
+  const nums = new Set(Object.keys(nameMap));
+  allRecords.forEach(r=>{ if(r.gradeClassNumber) nums.add(r.gradeClassNumber); });
+  const list = [...nums];
+  if(!list.length){ showToast('⚠️ 대상 학생이 없습니다.','err'); return; }
+  if(!confirm(`전체 학생 ${list.length}명의 누적 번호를 날짜순 기준으로 다시 계산합니다. 계속할까요?`)) return;
+  const btn=document.getElementById('recalcAllBtn'); btn.disabled=true;
+  try{
+    for(let i=0;i<list.length;i++){
+      btn.textContent = `재계산 중… (${i+1}/${list.length})`;
+      await renumberStudentCumRecords(list[i]);
+    }
+    showToast(`✅ 전체 ${list.length}명 재계산 완료`,'ok');
+  }catch(e){ showToast('❌ 재계산 실패: '+e.message,'err'); }
+  finally{ btn.disabled=false; btn.textContent='🔄 전체 학생 누적 번호 다시 계산하기 (날짜순 정합성 맞추기)'; }
+}
 // ── 관리자: 학생명렬 일괄 가져오기 ──
 async function importRoster(){
   const raw=document.getElementById('rosterImportText').value;

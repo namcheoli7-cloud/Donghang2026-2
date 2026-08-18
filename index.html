@@ -175,6 +175,9 @@ body {
 .admin-panel { display:none; } .admin-panel.active { display:block; }
 .approved-row { display:flex; align-items:center; justify-content:space-between; padding:9px 12px; border:1px solid var(--gray1); border-radius:var(--radius-sm); margin-bottom:6px; font-size:13px; }
 .approved-row button { border:none; background:none; color:var(--danger); font-weight:700; cursor:pointer; font-size:12px; }
+.approved-row button.save-btn { color:var(--ok); }
+.approved-row .roster-num { width:56px; flex-shrink:0; font-weight:700; color:var(--gray4); font-size:13px; }
+.approved-row .roster-name-input { flex:1; padding:7px 9px; border:1.5px solid var(--gray2); border-radius:var(--radius-sm); font-size:13px; margin-right:8px; }
 @media (max-width: 600px) {
   .appbody { padding: 10px; } .card-body { padding: 12px; } .modal-body { padding: 10px 12px 40px; }
   .main-tab { font-size: 12px; padding: 14px 2px; } .form-row { grid-template-columns: 1fr; }
@@ -555,6 +558,10 @@ body {
         <textarea id="rosterImportText" style="width:100%;min-height:160px;padding:10px;border:1.5px solid var(--gray2);border-radius:var(--radius-sm);font-family:monospace;font-size:13px;" placeholder="10101	김철수
 10102	이영희"></textarea>
         <button class="btn-main ok" id="importRosterBtn">📥 학생명렬 일괄 등록</button>
+        <hr class="divider">
+        <div class="card-header" style="padding:0;background:none;border:none;font-size:13px;font-weight:800;color:var(--gray4);margin-bottom:8px;">👥 학생명렬 관리 (수정 · 삭제)</div>
+        <input type="text" id="rosterSearchInput" placeholder="학번 또는 이름으로 검색" style="width:100%;padding:9px 11px;border:1.5px solid var(--gray2);border-radius:var(--radius-sm);margin-bottom:10px;">
+        <div id="rosterManageList" style="max-height:360px;overflow-y:auto;"></div>
       </div>
       <div class="admin-panel" id="admin-approve">
         <div class="hint" style="margin-bottom:10px;">경기도교육청 계정이 아닌 개인 Google 계정을 개별 승인합니다.</div>
@@ -648,6 +655,7 @@ function attachListeners(){
   unsub.push(onSnapshot(collection(db,'roster'), (snap)=>{
     const m={}; snap.forEach(d=>{ m[d.id]=d.data().name||''; });
     nameMap=m; dataReady.roster=true;
+    renderRosterManageList(document.getElementById('rosterSearchInput')?document.getElementById('rosterSearchInput').value.trim():'');
   }, (err)=> handlePermissionError(err)));
 
   unsub.push(onSnapshot(collection(db,'studentCounters'), (snap)=>{
@@ -772,6 +780,7 @@ function initUiOnce(){
     b.classList.add('ac'); document.getElementById('admin-'+b.dataset.admin).classList.add('active');
   }));
   document.getElementById('importRosterBtn').addEventListener('click', importRoster);
+  document.getElementById('rosterSearchInput').addEventListener('input', e=> renderRosterManageList(e.target.value.trim()));
   document.getElementById('recalcAllBtn').addEventListener('click', recalcAllStudents);
   document.getElementById('addApprovedBtn').addEventListener('click', addApprovedEmail);
   document.getElementById('addCategoryBtn').addEventListener('click', addCategory);
@@ -1437,6 +1446,37 @@ async function recalcAllStudents(){
     showToast(`✅ 전체 ${list.length}명 재계산 완료`,'ok');
   }catch(e){ showToast('❌ 재계산 실패: '+e.message,'err'); }
   finally{ btn.disabled=false; btn.textContent='🔄 전체 학생 누적 번호 다시 계산하기 (날짜순 정합성 맞추기)'; }
+}
+// ── 학생명렬 관리 (검색 · 수정 · 삭제) ──
+function renderRosterManageList(filter){
+  const wrap=document.getElementById('rosterManageList'); if(!wrap) return;
+  const f=(filter||'').trim();
+  const entries=Object.keys(nameMap).sort().map(num=>({num, name:nameMap[num]}));
+  const filtered = f ? entries.filter(e=> e.num.includes(f) || (e.name||'').includes(f)) : entries;
+  if(!filtered.length){ wrap.innerHTML='<div class="hint">'+(f?'검색 결과가 없습니다.':'등록된 학생이 없습니다.')+'</div>'; return; }
+  wrap.innerHTML = filtered.map(e=>`
+    <div class="approved-row">
+      <span class="roster-num">${esc(e.num)}</span>
+      <input type="text" class="roster-name-input" value="${esc(e.name)}" data-rosternum="${esc(e.num)}">
+      <button class="save-btn" data-rostersave="${esc(e.num)}">저장</button>
+      <button data-rosterdel="${esc(e.num)}">삭제</button>
+    </div>`).join('');
+  wrap.querySelectorAll('[data-rostersave]').forEach(b=> b.addEventListener('click', ()=>saveRosterName(b.dataset.rostersave)));
+  wrap.querySelectorAll('[data-rosterdel]').forEach(b=> b.addEventListener('click', ()=>deleteRosterEntry(b.dataset.rosterdel)));
+}
+async function saveRosterName(num){
+  const input=document.querySelector('.roster-name-input[data-rosternum="'+num+'"]');
+  if(!input) return;
+  const newName=input.value.trim();
+  if(!newName){ showToast('⚠️ 이름을 입력해 주세요.','err'); return; }
+  try{ await setDoc(doc(db,'roster',num), { name:newName }); showToast('✅ 저장되었습니다: '+num,'ok'); }
+  catch(e){ showToast('❌ 저장 실패: '+e.message,'err'); }
+}
+async function deleteRosterEntry(num){
+  const name=nameMap[num]||'';
+  if(!confirm(`학번 ${num} (${name}) 학생을 명렬에서 삭제할까요?\n※ 이미 저장된 생활지도 기록에는 영향 없습니다.`)) return;
+  try{ await deleteDoc(doc(db,'roster',num)); showToast('✅ 삭제되었습니다: '+num,'ok'); }
+  catch(e){ showToast('❌ 삭제 실패: '+e.message,'err'); }
 }
 // ── 관리자: 학생명렬 일괄 가져오기 ──
 async function importRoster(){

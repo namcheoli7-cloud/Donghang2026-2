@@ -597,13 +597,19 @@ import {
   getAuth, GoogleAuthProvider, signInWithPopup, signOut, onAuthStateChanged
 } from "https://www.gstatic.com/firebasejs/10.13.0/firebase-auth.js";
 import {
-  getFirestore, collection, doc, onSnapshot, addDoc, updateDoc, deleteDoc,
+  initializeFirestore, persistentLocalCache, persistentMultipleTabManager,
+  collection, doc, onSnapshot, addDoc, updateDoc, deleteDoc,
   setDoc, getDoc, getDocs, query, where, runTransaction, serverTimestamp, writeBatch
 } from "https://www.gstatic.com/firebasejs/10.13.0/firebase-firestore.js";
 
 const app = initializeApp(firebaseConfig);
 const auth = getAuth(app);
-const db = getFirestore(app, 'donghang'); // ⚠️ 기본이 아닌 이름 있는 데이터베이스('donghang')에 연결
+// ⚠️ 기본이 아닌 이름 있는 데이터베이스('donghang')에 연결 + 로컬(IndexedDB) 캐싱 활성화.
+// 캐싱을 켜두면 재접속 시 전체 컬렉션을 다시 읽지 않고 바뀐 부분만 받아와서, 사용자가 많아져도
+// Firestore 읽기 비용이 크게 절감됩니다 (여러 탭을 동시에 열어도 안전하도록 멀티탭 매니저 사용).
+const db = initializeFirestore(app, {
+  localCache: persistentLocalCache({ tabManager: persistentMultipleTabManager() })
+}, 'donghang');
 const provider = new GoogleAuthProvider();
 
 let currentUser = null;

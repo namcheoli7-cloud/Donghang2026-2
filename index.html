@@ -628,7 +628,10 @@ onAuthStateChanged(auth, (user) => {
   unsub.forEach(f=>f()); unsub=[];
   allRecords=[]; nameMap={}; counterMap={};
   dataReady={records:false, roster:false, counters:false};
-  if(!user){ currentUser=null; showGate('loginScreen'); return; }
+  if(!user){
+    currentUser=null; authorizedShown=false; deniedShown=false;
+    showGate('loginScreen'); return;
+  }
   currentUser = user;
   showGate('loadingScreen');
   attachListeners();
@@ -867,7 +870,8 @@ function onNumInput(){
 function fillNameByNum(num){
   if(nameMap[num]){ document.getElementById('inName').value=nameMap[num]; return; }
   const found=allRecords.find(r=>r.gradeClassNumber===num);
-  if(found && found.name) document.getElementById('inName').value=found.name;
+  if(found && found.name){ document.getElementById('inName').value=found.name; return; }
+  document.getElementById('inName').value=''; // 일치하는 학생 없음 → 이전 값이 남아있지 않도록 비움
 }
 function onNameInput(){
   const name=document.getElementById('inName').value.trim();
@@ -1106,7 +1110,11 @@ const PAGE_SIZE=10;
 function getUniqCats(recs){ const seen={}, cats=[]; recs.forEach(r=>{ if(r.category && !seen[r.category]){ seen[r.category]=true; cats.push(r.category); } }); return cats.sort(); }
 function onSearchNumInput(){
   const num=document.getElementById('searchNum').value.trim(); searchResolvedNum=num; hideDupSelect('searchDupSelect');
-  if(num.length===5){ let name=nameMap[num]||''; if(!name){ const f=allRecords.find(r=>r.gradeClassNumber===num); if(f) name=f.name||''; } if(name) document.getElementById('searchName').value=name; }
+  if(num.length===5){
+    let name=nameMap[num]||'';
+    if(!name){ const f=allRecords.find(r=>r.gradeClassNumber===num); if(f) name=f.name||''; }
+    document.getElementById('searchName').value=name; // 일치 안 되면 빈 문자열로 덮어써서 이전 값이 안 남게 함
+  }
 }
 function onSearchNameInput(){
   const name=document.getElementById('searchName').value.trim();
@@ -1504,7 +1512,7 @@ async function addApprovedEmail(){
   catch(e){ showToast('❌ 승인 실패: '+e.message,'err'); }
 }
 function renderApprovedListLive(){
-  onSnapshot(collection(db,'approvedUsers'), (snap)=>{
+  unsub.push(onSnapshot(collection(db,'approvedUsers'), (snap)=>{
     const el=document.getElementById('approvedList');
     if(!el) return;
     if(snap.empty){ el.innerHTML='<div class="hint">승인된 외부 계정이 없습니다.</div>'; return; }
@@ -1513,7 +1521,7 @@ function renderApprovedListLive(){
       if(!confirm(b.dataset.rmemail+' 승인을 취소할까요?')) return;
       try{ await deleteDoc(doc(db,'approvedUsers',b.dataset.rmemail)); showToast('✅ 승인 취소됨','ok'); } catch(e){ showToast('❌ 실패: '+e.message,'err'); }
     }));
-  });
+  }));
 }
 
 // ── 관리자 비밀번호 게이트 (간단한 오조작 방지용 — 실제 데이터 보안은 Firestore 규칙이 담당) ──
@@ -1556,10 +1564,16 @@ function renderCategoryManageList(){
   const wrap=document.getElementById('categoryManageList'); if(!wrap) return;
   wrap.innerHTML = appSettings.categories.map(c=>{
     const isDanger = appSettings.dangerCategories.includes(c);
-    return `<div class="approved-row"><label style="display:flex;align-items:center;gap:8px;cursor:pointer;flex:1;"><input type="checkbox" data-dangercat="${esc(c)}" ${isDanger?'checked':''}> ${esc(c)}</label><button data-rmcat="${esc(c)}">삭제</button></div>`;
+    return `<div class="approved-row">
+      <input type="text" class="roster-name-input cat-name-input" value="${esc(c)}" data-catold="${esc(c)}">
+      <label style="display:flex;align-items:center;gap:5px;font-size:12px;color:var(--gray4);white-space:nowrap;margin-right:8px;"><input type="checkbox" data-dangercat="${esc(c)}" ${isDanger?'checked':''}> 심각</label>
+      <button class="save-btn" data-catsave="${esc(c)}">저장</button>
+      <button data-rmcat="${esc(c)}">삭제</button>
+    </div>`;
   }).join('');
   wrap.querySelectorAll('[data-rmcat]').forEach(b=> b.addEventListener('click', ()=>removeCategory(b.dataset.rmcat)));
   wrap.querySelectorAll('[data-dangercat]').forEach(cb=> cb.addEventListener('change', ()=>toggleDanger(cb.dataset.dangercat, cb.checked)));
+  wrap.querySelectorAll('[data-catsave]').forEach(b=> b.addEventListener('click', ()=>renameCategory(b.dataset.catsave)));
 }
 async function addCategory(){
   const val=document.getElementById('newCategoryInput').value.trim();
@@ -1573,17 +1587,30 @@ async function removeCategory(cat){
   try{ await updateDoc(doc(db,'settings','config'), { categories: appSettings.categories.filter(c=>c!==cat), dangerCategories: appSettings.dangerCategories.filter(c=>c!==cat) }); showToast('✅ 삭제되었습니다.','ok'); }
   catch(e){ showToast('❌ 실패: '+e.message,'err'); }
 }
-async function toggleDanger(cat, checked){
-  let next=appSettings.dangerCategories.slice();
-  if(checked && !next.includes(cat)) next.push(cat);
-  if(!checked) next=next.filter(c=>c!==cat);
-  try{ await updateDoc(doc(db,'settings','config'), { dangerCategories: next }); }
+async function renameCategory(oldName){
+  const input=document.querySelector('.cat-name-input[data-catold="'+oldName+'"]');
+  if(!input) return;
+  const newName=input.value.trim();
+  if(!newName){ showToast('⚠️ 유형 이름을 입력해 주세요.','err'); return; }
+  if(newName===oldName){ showToast('변경사항이 없습니다.','ok'); return; }
+  if(appSettings.categories.includes(newName)){ showToast('⚠️ 이미 있는 유형 이름입니다.','err'); return; }
+  const nextCategories = appSettings.categories.map(c=> c===oldName ? newName : c);
+  const nextDanger = appSettings.dangerCategories.map(c=> c===oldName ? newName : c);
+  try{
+    await updateDoc(doc(db,'settings','config'), { categories: nextCategories, dangerCategories: nextDanger });
+    showToast('✅ "'+oldName+'" → "'+newName+'"로 변경되었습니다. (이미 저장된 기록은 예전 이름 그대로 유지됩니다)','ok');
+  }
   catch(e){ showToast('❌ 실패: '+e.message,'err'); }
 }
 function renderPeriodManageList(){
   const wrap=document.getElementById('periodManageList'); if(!wrap) return;
-  wrap.innerHTML = appSettings.periods.map(p=>`<div class="approved-row"><span>${esc(p)}</span><button data-rmperiod="${esc(p)}">삭제</button></div>`).join('');
+  wrap.innerHTML = appSettings.periods.map(p=>`<div class="approved-row">
+    <input type="text" class="roster-name-input period-name-input" value="${esc(p)}" data-pold="${esc(p)}">
+    <button class="save-btn" data-psave="${esc(p)}">저장</button>
+    <button data-rmperiod="${esc(p)}">삭제</button>
+  </div>`).join('');
   wrap.querySelectorAll('[data-rmperiod]').forEach(b=> b.addEventListener('click', ()=>removePeriod(b.dataset.rmperiod)));
+  wrap.querySelectorAll('[data-psave]').forEach(b=> b.addEventListener('click', ()=>renamePeriod(b.dataset.psave)));
 }
 async function addPeriod(){
   const val=document.getElementById('newPeriodInput').value.trim();
@@ -1597,8 +1624,23 @@ async function removePeriod(p){
   try{ await updateDoc(doc(db,'settings','config'), { periods: appSettings.periods.filter(x=>x!==p) }); showToast('✅ 삭제되었습니다.','ok'); }
   catch(e){ showToast('❌ 실패: '+e.message,'err'); }
 }
+async function renamePeriod(oldName){
+  const input=document.querySelector('.period-name-input[data-pold="'+oldName+'"]');
+  if(!input) return;
+  const newName=input.value.trim();
+  if(!newName){ showToast('⚠️ 교시 이름을 입력해 주세요.','err'); return; }
+  if(newName===oldName){ showToast('변경사항이 없습니다.','ok'); return; }
+  if(appSettings.periods.includes(newName)){ showToast('⚠️ 이미 있는 교시 이름입니다.','err'); return; }
+  const next = appSettings.periods.map(p=> p===oldName ? newName : p);
+  try{
+    await updateDoc(doc(db,'settings','config'), { periods: next });
+    showToast('✅ "'+oldName+'" → "'+newName+'"로 변경되었습니다. (이미 저장된 기록은 예전 이름 그대로 유지됩니다)','ok');
+  }
+  catch(e){ showToast('❌ 실패: '+e.message,'err'); }
+}
 async function saveClassCounts(){
   const counts={};
+
   ['1','2','3'].forEach(g=>{ const v=parseInt(document.getElementById('classCount'+g).value,10); counts[g]= (isNaN(v)||v<1) ? 1 : v; });
   try{ await updateDoc(doc(db,'settings','config'), { classCounts: counts }); showToast('✅ 학급 수가 저장되었습니다.','ok'); }
   catch(e){ showToast('❌ 실패: '+e.message,'err'); }

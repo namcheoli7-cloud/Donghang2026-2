@@ -338,8 +338,8 @@ body {
           <div class="field" style="margin-bottom:8px">
             <label>동행 누적 여부</label>
             <div class="toggle-group" id="cumToggle">
-              <button class="toggle-btn ac" data-cum="NO">누적 안 함</button>
-              <button class="toggle-btn" data-cum="YES">누적</button>
+              <button class="toggle-btn" data-cum="NO">누적 안 함</button>
+              <button class="toggle-btn ac-danger" data-cum="YES">누적</button>
               <button class="toggle-btn" data-cum="OFFSET">상쇄</button>
             </div>
           </div>
@@ -950,7 +950,7 @@ function renderMultiStudentChips(){
 }
 
 // ── 동행 누적/상쇄 3단 토글 ──
-let cumValue='NO';
+let cumValue='YES';
 function setCum(val, el){
   cumValue=val;
   document.querySelectorAll('#cumToggle .toggle-btn').forEach(b=>b.classList.remove('ac','ac-danger','ac-ok'));
@@ -1061,10 +1061,10 @@ function resetInputForm(){
   updateDateDay();
   selectPeriodChip('inPeriodChips','inPeriod','');
   document.getElementById('inCategory').value='';
-  resolvedNum=''; hideDupSelect('dupSelect'); cumValue='NO';
+  resolvedNum=''; hideDupSelect('dupSelect'); cumValue='YES';
   document.querySelectorAll('#cumToggle .toggle-btn').forEach(b=>b.classList.remove('ac','ac-danger','ac-ok'));
-  document.querySelector('#cumToggle .toggle-btn').classList.add('ac');
-  document.getElementById('cumAutoInfo').style.display='none';
+  document.querySelectorAll('#cumToggle .toggle-btn')[1].classList.add('ac-danger');
+  refreshCumInfo();
   ['field-inNum','field-inName','field-inDate','field-inPeriod','field-inTeacher','field-inCategory','field-inContent'].forEach(id=>{ const el=document.getElementById(id); if(el) el.classList.remove('has-error'); });
   setErrorMsg(document.getElementById('field-inName'),'이름을 입력해 주세요.');
   multiStudents=[]; renderMultiStudentChips();

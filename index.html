@@ -416,6 +416,10 @@ body {
           </div>
         </div>
       </div>
+      <div style="display:flex;border:1.5px solid var(--gray2);border-radius:var(--radius-sm);overflow:hidden;width:fit-content;margin-bottom:12px;">
+        <button type="button" class="filter-chip ac" id="gradeModeRecordsBtn" style="border:none;border-radius:0;">📋 전체 기록</button>
+        <button type="button" class="filter-chip" id="gradeModeRankBtn" style="border:none;border-radius:0;">🏆 누적 순위</button>
+      </div>
       <div id="gradeResult"><div class="state-msg"><span class="ico">📋</span>학년을 선택하면 전체 기록이 시간순으로 표시됩니다.</div></div>
       <div class="pagination" id="gradePagination"></div>
     </div>
@@ -761,6 +765,8 @@ function initUiOnce(){
   document.getElementById('sortAscBtn').addEventListener('click', ()=>setStudentSortOrder('asc'));
 
   document.querySelectorAll('.grade-chip').forEach(b=> b.addEventListener('click', ()=>selectGrade(b.dataset.grade,b)));
+  document.getElementById('gradeModeRecordsBtn').addEventListener('click', ()=>setGradeViewMode('records'));
+  document.getElementById('gradeModeRankBtn').addEventListener('click', ()=>setGradeViewMode('rank'));
 
   document.getElementById('modalCloseBtn').addEventListener('click', ()=>document.getElementById('modalWrap').classList.remove('open'));
   document.getElementById('editModalBtn').addEventListener('click', openEditModal);
@@ -1225,10 +1231,23 @@ function selectClass(grade,cls,el){
 
 // ── 학년별 조회 ──
 let filteredG=[], gradePage=1;
+let gradeViewMode='records'; // 'records' = 전체 기록 시간순 / 'rank' = 누적 많은 순 랭킹
 function selectGrade(grade,el){
   document.querySelectorAll('.grade-chip').forEach(c=>c.classList.remove('ac')); el.classList.add('ac');
   filteredG=allRecords.filter(item=>item.grade===grade);
-  filteredG.sort(sortDesc); gradePage=1; renderGradePage(grade);
+  filteredG.sort(sortDesc); gradePage=1;
+  renderGradeView(grade);
+}
+function renderGradeView(grade){
+  if(gradeViewMode==='rank') renderGradeRank(grade);
+  else renderGradePage(grade);
+}
+function setGradeViewMode(mode){
+  gradeViewMode=mode;
+  document.getElementById('gradeModeRecordsBtn').classList.toggle('ac', mode==='records');
+  document.getElementById('gradeModeRankBtn').classList.toggle('ac', mode==='rank');
+  const chip=document.querySelector('.grade-chip.ac');
+  if(chip) renderGradeView(chip.dataset.grade);
 }
 function renderGradePage(grade){
   const label=(grade||'?')+'학년';
@@ -1239,6 +1258,27 @@ function renderGradePage(grade){
   wrap.innerHTML=`<div class="result-header"><span class="result-count">${label} 전체 기록 ${filteredG.length}건</span></div>`+items.map(recordCard).join('');
   attachInlineEditHandlers(wrap);
   document.getElementById('gradePagination').innerHTML=buildPagination(gradePage,totalPages,goGradePage);
+}
+// 학년부용: 그 학년 안에서 동행 누적 횟수가 많은 학생부터 순위표로 보여줌
+function renderGradeRank(grade){
+  const label=(grade||'?')+'학년';
+  document.getElementById('gradePagination').innerHTML=''; // 순위표는 페이지 없이 한 번에 표시
+  const gradeRecs=allRecords.filter(r=>r.grade===grade);
+  if(!gradeRecs.length){ document.getElementById('gradeResult').innerHTML=`<div class="state-msg"><span class="ico">📭</span>${label} 기록이 없습니다.</div>`; return; }
+  const studentMap={};
+  gradeRecs.forEach(r=>{ if(!studentMap[r.gradeClassNumber]) studentMap[r.gradeClassNumber]={name:r.name, className:r.className}; });
+  const students = Object.keys(studentMap)
+    .map(id=>({ id, name:studentMap[id].name, className:studentMap[id].className, cnt:counterMap[id]||0 }))
+    .filter(s=>s.cnt>0)
+    .sort((a,b)=> b.cnt-a.cnt);
+  if(!students.length){ document.getElementById('gradeResult').innerHTML=`<div class="state-msg"><span class="ico">🏆</span>${label}에 누적 기록이 있는 학생이 없습니다.</div>`; return; }
+  const rows = students.map((s,i)=>{
+    const step=getStep(s.cnt), ccls=cntColorCls(s.cnt);
+    return `<tr><td class="center" style="font-weight:800;color:var(--gray3);">${i+1}</td><td><span class="s-name">${esc(s.name)}</span><br><span class="s-num">${esc(s.className)} · ${esc(s.id)}</span></td><td class="center"><span class="s-cnt ${ccls}">${s.cnt}</span></td><td class="center"><span class="step-badge ${step.cls}">${step.label}</span></td><td class="center"><button class="btn-detail" data-sid="${esc(s.id)}" data-sname="${esc(s.name)}">기록 보기</button></td></tr>`;
+  }).join('');
+  const wrap=document.getElementById('gradeResult');
+  wrap.innerHTML = `<div class="card"><div class="card-header">🏆 ${label} 누적 순위 (${students.length}명)</div><div style="overflow-x:auto"><table class="summary-table"><thead><tr><th class="center">순위</th><th>학생</th><th class="center">누적</th><th class="center">단계</th><th class="center">상세</th></tr></thead><tbody>${rows}</tbody></table></div></div>`;
+  wrap.querySelectorAll('.btn-detail').forEach(b=> b.addEventListener('click', ()=>openModal(b.dataset.sid,b.dataset.sname)));
 }
 function goGradePage(p){ const total=Math.ceil(filteredG.length/PAGE_SIZE); if(p<1||p>total) return; gradePage=p; const chip=document.querySelector('.grade-chip.ac'); renderGradePage(chip?chip.dataset.grade:''); }
 

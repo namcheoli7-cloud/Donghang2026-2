@@ -101,6 +101,12 @@ body {
 .grade-chip:hover { border-color: var(--primary); color: var(--primary); background: var(--primary-lt); }
 .grade-chip.ac { background: var(--primary); border-color: var(--primary); color: #fff; }
 .summary-table { width: 100%; border-collapse: collapse; font-size: 14px; }
+.rank-card { background: var(--white); border: 1px solid var(--gray1); border-radius: var(--radius-md); padding: 12px 14px; margin-bottom: 8px; }
+.rank-top { display: flex; align-items: center; gap: 9px; flex-wrap: wrap; margin-bottom: 9px; }
+.rank-num { flex-shrink: 0; width: 26px; height: 26px; border-radius: 50%; background: var(--gray0); color: var(--gray4); font-weight: 800; font-size: 13px; display: flex; align-items: center; justify-content: center; }
+.rank-num.top3 { background: var(--warn); color: #fff; }
+.rank-bottom { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; justify-content: space-between; }
+.rank-bottom .left-group { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
 .summary-table th { background: var(--gray0); padding: 9px 11px; text-align: left; font-size: 12px; font-weight: 800; color: var(--gray4); border-bottom: 2px solid var(--gray1); }
 .summary-table th.center, .summary-table td.center { text-align: center; }
 .summary-table td { padding: 10px 11px; border-bottom: 1px solid var(--gray1); vertical-align: middle; }
@@ -1272,12 +1278,25 @@ function renderGradeRank(grade){
     .filter(s=>s.cnt>0)
     .sort((a,b)=> b.cnt-a.cnt);
   if(!students.length){ document.getElementById('gradeResult').innerHTML=`<div class="state-msg"><span class="ico">🏆</span>${label}에 누적 기록이 있는 학생이 없습니다.</div>`; return; }
-  const rows = students.map((s,i)=>{
+  const cards = students.map((s,i)=>{
     const step=getStep(s.cnt), ccls=cntColorCls(s.cnt);
-    return `<tr><td class="center" style="font-weight:800;color:var(--gray3);">${i+1}</td><td><span class="s-name">${esc(s.name)}</span><br><span class="s-num">${esc(s.className)} · ${esc(s.id)}</span></td><td class="center"><span class="s-cnt ${ccls}">${s.cnt}</span></td><td class="center"><span class="step-badge ${step.cls}">${step.label}</span></td><td class="center"><button class="btn-detail" data-sid="${esc(s.id)}" data-sname="${esc(s.name)}">기록 보기</button></td></tr>`;
+    return `<div class="rank-card">
+      <div class="rank-top">
+        <span class="rank-num${i<3?' top3':''}">${i+1}</span>
+        <span class="student-name">${esc(s.name)}</span>
+        <span class="student-num">${esc(s.className)} · ${esc(s.id)}</span>
+      </div>
+      <div class="rank-bottom">
+        <div class="left-group">
+          <span class="s-cnt ${ccls}">누적 ${s.cnt}회</span>
+          <span class="step-badge ${step.cls}">${step.label}</span>
+        </div>
+        <button class="btn-detail" data-sid="${esc(s.id)}" data-sname="${esc(s.name)}">기록 보기</button>
+      </div>
+    </div>`;
   }).join('');
   const wrap=document.getElementById('gradeResult');
-  wrap.innerHTML = `<div class="card"><div class="card-header">🏆 ${label} 누적 순위 (${students.length}명)</div><div style="overflow-x:auto"><table class="summary-table"><thead><tr><th class="center">순위</th><th>학생</th><th class="center">누적</th><th class="center">단계</th><th class="center">상세</th></tr></thead><tbody>${rows}</tbody></table></div></div>`;
+  wrap.innerHTML = `<div class="result-header"><span class="result-count">🏆 ${label} 누적 순위 (${students.length}명)</span></div>${cards}`;
   wrap.querySelectorAll('.btn-detail').forEach(b=> b.addEventListener('click', ()=>openModal(b.dataset.sid,b.dataset.sname)));
 }
 function goGradePage(p){ const total=Math.ceil(filteredG.length/PAGE_SIZE); if(p<1||p>total) return; gradePage=p; const chip=document.querySelector('.grade-chip.ac'); renderGradePage(chip?chip.dataset.grade:''); }

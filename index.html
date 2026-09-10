@@ -107,6 +107,10 @@ body {
 .rank-num.top3 { background: var(--warn); color: #fff; }
 .rank-bottom { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; justify-content: space-between; }
 .rank-bottom .left-group { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.intervention-row { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 10px; padding-top: 10px; border-top: 1px dashed var(--gray1); }
+.interv-label { display: flex; align-items: center; gap: 5px; font-size: 12px; font-weight: 700; color: var(--gray4); cursor: pointer; }
+.interv-label input { width: 15px; height: 15px; cursor: pointer; }
+.handled-badge { font-size: 11px; font-weight: 700; color: var(--ok); background: var(--ok-lt); padding: 3px 9px; border-radius: 100px; margin-left: 4px; white-space: nowrap; }
 .summary-table th { background: var(--gray0); padding: 9px 11px; text-align: left; font-size: 12px; font-weight: 800; color: var(--gray4); border-bottom: 2px solid var(--gray1); }
 .summary-table th.center, .summary-table td.center { text-align: center; }
 .summary-table td { padding: 10px 11px; border-bottom: 1px solid var(--gray1); vertical-align: middle; }
@@ -626,6 +630,7 @@ let currentUser = null;
 let allRecords = [];       // {id, ...fields}
 let nameMap = {};          // {학번: 이름}
 let counterMap = {};       // {학번: 현재누적횟수}
+let interventionMap = {};  // {학번: {grade,student,donghang,committee: boolean}} - 단계별 지도 완료 체크
 let dataReady = { records:false, roster:false, counters:false };
 let unsub = [];
 
@@ -678,8 +683,9 @@ function attachListeners(){
   }, (err)=> handlePermissionError(err)));
 
   unsub.push(onSnapshot(collection(db,'studentCounters'), (snap)=>{
-    const m={}; snap.forEach(d=>{ m[d.id]=d.data().count||0; });
-    counterMap=m; dataReady.counters=true;
+    const m={}, im={};
+    snap.forEach(d=>{ const data=d.data(); m[d.id]=data.count||0; im[d.id]=data.interventions||{}; });
+    counterMap=m; interventionMap=im; dataReady.counters=true;
     refreshActiveViews();
   }, (err)=> handlePermissionError(err)));
 
@@ -1266,6 +1272,12 @@ function renderGradePage(grade){
   document.getElementById('gradePagination').innerHTML=buildPagination(gradePage,totalPages,goGradePage);
 }
 // 학년부용: 그 학년 안에서 동행 누적 횟수가 많은 학생부터 순위표로 보여줌
+const INTERVENTION_STAGES = [
+  { minCnt:3, key:'grade',     label:'학년부지도' },
+  { minCnt:4, key:'student',   label:'학생부지도' },
+  { minCnt:5, key:'donghang',  label:'동행프로그램' },
+  { minCnt:6, key:'committee', label:'생교위' }
+];
 function renderGradeRank(grade){
   const label=(grade||'?')+'학년';
   document.getElementById('gradePagination').innerHTML=''; // 순위표는 페이지 없이 한 번에 표시
@@ -1280,6 +1292,13 @@ function renderGradeRank(grade){
   if(!students.length){ document.getElementById('gradeResult').innerHTML=`<div class="state-msg"><span class="ico">🏆</span>${label}에 누적 기록이 있는 학생이 없습니다.</div>`; return; }
   const cards = students.map((s,i)=>{
     const step=getStep(s.cnt), ccls=cntColorCls(s.cnt);
+    const flags = interventionMap[s.id] || {};
+    const applicable = INTERVENTION_STAGES.filter(st=> s.cnt>=st.minCnt);
+    const curStage = applicable.length ? applicable[applicable.length-1] : null; // 현재 단계에 해당하는 항목
+    const handled = curStage && flags[curStage.key];
+    const checksHtml = applicable.length ? `<div class="intervention-row">${applicable.map(st=>
+      `<label class="interv-label"><input type="checkbox" data-interv="${st.key}" data-sid="${esc(s.id)}" ${flags[st.key]?'checked':''}> ${st.label}</label>`
+    ).join('')}</div>` : '';
     return `<div class="rank-card">
       <div class="rank-top">
         <span class="rank-num${i<3?' top3':''}">${i+1}</span>
@@ -1290,14 +1309,26 @@ function renderGradeRank(grade){
         <div class="left-group">
           <span class="s-cnt ${ccls}">누적 ${s.cnt}회</span>
           <span class="step-badge ${step.cls}">${step.label}</span>
+          ${handled?'<span class="handled-badge">✅ 처리완료</span>':''}
         </div>
         <button class="btn-detail" data-sid="${esc(s.id)}" data-sname="${esc(s.name)}">기록 보기</button>
       </div>
+      ${checksHtml}
     </div>`;
   }).join('');
   const wrap=document.getElementById('gradeResult');
   wrap.innerHTML = `<div class="result-header"><span class="result-count">🏆 ${label} 누적 순위 (${students.length}명)</span></div>${cards}`;
+  wrap.querySelectorAll('[data-interv]').forEach(cb=> cb.addEventListener('change', ()=>toggleIntervention(cb.dataset.sid, cb.dataset.interv, cb.checked)));
   wrap.querySelectorAll('.btn-detail').forEach(b=> b.addEventListener('click', ()=>openModal(b.dataset.sid,b.dataset.sname)));
+}
+async function toggleIntervention(sid, key, checked){
+  try{
+    await updateDoc(doc(db,'studentCounters',sid), { ['interventions.'+key]: checked });
+  }catch(e){
+    // 문서가 아직 없는 드문 경우에 대비한 안전장치
+    try{ await setDoc(doc(db,'studentCounters',sid), { interventions:{ [key]: checked } }, { merge:true }); }
+    catch(e2){ showToast('❌ 저장 실패: '+e2.message,'err'); }
+  }
 }
 function goGradePage(p){ const total=Math.ceil(filteredG.length/PAGE_SIZE); if(p<1||p>total) return; gradePage=p; const chip=document.querySelector('.grade-chip.ac'); renderGradePage(chip?chip.dataset.grade:''); }
 

@@ -4,6 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
 <title>동행프로그램 조회 시스템</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 <style>
 *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 :root {
@@ -204,7 +205,6 @@ body {
   .panel { display: block !important; } #panel-student { display: block !important; }
   #panel-input, #panel-class, #panel-grd { display: none !important; }
   .studentFilterBar, #studentFilterBar { display: none !important; } .btn-edit-inline { display: none !important; }
-  #studentList { column-count: 2; column-gap: 14px; }
   .record-card { break-inside: avoid; border: 1px solid #ccc; border-radius: 4px; padding: 6px 9px; margin-bottom: 6px; }
   .rec-top { margin-bottom: 4px; } .rec-badges { gap: 3px; } .badge { padding: 1px 6px; font-size: 9px; }
   .student-name { font-size: 12px; } .student-num { font-size: 9px; }
@@ -394,6 +394,7 @@ body {
           </div>
           <button class="btn-refresh" id="studentRefreshBtn">↻ 새로고침</button>
           <button class="btn-refresh" id="printModalBtn" style="background:var(--primary);color:#fff;border-color:var(--primary);">🖨️ 출력</button>
+          <button class="btn-refresh" id="excelExportBtn" style="background:var(--ok);color:#fff;border-color:var(--ok);">📊 엑셀 다운로드</button>
         </div>
       </div>
       <div id="studentFilterBar" style="display:none;flex-wrap:wrap;gap:5px;margin-bottom:10px;"></div>
@@ -793,6 +794,7 @@ function initUiOnce(){
   document.getElementById('doAddStudentBtn').addEventListener('click', doAddStudent);
 
   document.getElementById('printModalBtn').addEventListener('click', openPrintModal);
+  document.getElementById('excelExportBtn').addEventListener('click', exportToExcel);
   document.getElementById('printCloseBtn').addEventListener('click', ()=>document.getElementById('printModal').classList.remove('open'));
   document.getElementById('doPrintBtn').addEventListener('click', doPrint);
 
@@ -1524,6 +1526,33 @@ function doPrint(){
   window.print();
   printArea.innerHTML=original; attachInlineEditHandlers(printArea);
   printArea.classList.remove('print-hide-teacher');
+}
+
+// ── 엑셀 다운로드 (현재 화면에 보이는 유형 필터 + 정렬 순서를 그대로 반영) ──
+function exportToExcel(){
+  if(!filteredS.length){ showToast('⚠️ 먼저 학생을 조회해 주세요.','err'); return; }
+  if(typeof XLSX==='undefined'){ showToast('❌ 엑셀 라이브러리를 불러오지 못했습니다. 새로고침 후 다시 시도해 주세요.','err'); return; }
+  const items = studentCatFilter==='전체' ? filteredS : filteredS.filter(r=>r.category===studentCatFilter);
+  if(!items.length){ showToast('⚠️ 내보낼 기록이 없습니다.','err'); return; }
+  const rows = items.map(r=>({
+    '학번': r.gradeClassNumber,
+    '이름': r.name,
+    '날짜': r.date,
+    '교시': r.period,
+    '담당교사': r.teacher,
+    '유형': r.category,
+    '내용': r.content,
+    '누적여부': r.isCumulative==='YES' ? '누적' : (r.isCumulative==='OFFSET' ? '상쇄' : ''),
+    '누적횟수': (r.count!==''&&r.count!==undefined) ? r.count : ''
+  }));
+  const ws = XLSX.utils.json_to_sheet(rows);
+  ws['!cols'] = [{wch:8},{wch:10},{wch:12},{wch:8},{wch:10},{wch:14},{wch:45},{wch:8},{wch:8}];
+  const wb = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb, ws, '기록');
+  const now=new Date();
+  const stamp = `${now.getFullYear()}${String(now.getMonth()+1).padStart(2,'0')}${String(now.getDate()).padStart(2,'0')}`;
+  const who = items[0] ? items[0].name : '학생';
+  XLSX.writeFile(wb, `동행기록_${who}_${stamp}.xlsx`);
 }
 
 // ── 실시간 갱신 시 현재 화면 유지하며 재렌더 ──

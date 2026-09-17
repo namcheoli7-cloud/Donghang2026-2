@@ -320,6 +320,7 @@ body {
               <label>교시 <span class="req">*</span></label>
               <div class="chip-group" id="inPeriodChips"></div>
               <input type="hidden" id="inPeriod">
+              <div class="hint">여러 교시에 걸친 사안이면 여러 개 선택 가능합니다.</div>
               <div class="error-msg">교시를 선택해 주세요.</div>
             </div>
           </div>
@@ -824,18 +825,34 @@ function buildPeriodChips(containerId, hiddenId){
   document.getElementById(containerId).innerHTML = appSettings.periods.map(p=>
     `<button type="button" class="period-chip" data-val="${esc(p)}">${esc(p)}</button>`).join('');
   document.getElementById(containerId).querySelectorAll('.period-chip').forEach(b=>{
-    b.addEventListener('click', ()=>selectPeriodChip(containerId,hiddenId,b.dataset.val));
+    b.addEventListener('click', ()=>togglePeriodChip(containerId,hiddenId,b.dataset.val));
   });
 }
-function selectPeriodChip(containerId,hiddenId,val){
-  document.getElementById(hiddenId).value=val;
-  document.querySelectorAll('#'+containerId+' .period-chip').forEach(b=>b.classList.toggle('ac', b.dataset.val===val));
+// 여러 교시에 걸친 사안을 위해 다중 선택 지원: 클릭한 칩만 토글하고,
+// 선택된 교시들을 appSettings.periods 순서(=시간 순)대로 정리해 콤마로 이어 hidden input에 저장
+function togglePeriodChip(containerId, hiddenId, val){
+  const chipsEl=document.getElementById(containerId);
+  const btn=[...chipsEl.querySelectorAll('.period-chip')].find(b=>b.dataset.val===val);
+  if(btn) btn.classList.toggle('ac');
+  const selected = appSettings.periods.filter(p=>{
+    const b=[...chipsEl.querySelectorAll('.period-chip')].find(x=>x.dataset.val===p);
+    return b && b.classList.contains('ac');
+  });
+  document.getElementById(hiddenId).value = selected.join(', ');
   const fw=document.getElementById('field-'+hiddenId); if(fw) fw.classList.remove('has-error');
 }
+// 주어진 값(콤마로 구분된 다중값 가능)에 맞춰 칩들의 선택 상태를 동기화 (수정 폼 진입, 초기화 등에서 사용)
+function selectPeriodChip(containerId,hiddenId,val){
+  document.getElementById(hiddenId).value=val;
+  const selectedSet = new Set((val||'').split(',').map(s=>s.trim()).filter(Boolean));
+  document.querySelectorAll('#'+containerId+' .period-chip').forEach(b=>b.classList.toggle('ac', selectedSet.has(b.dataset.val)));
+  const fw=document.getElementById('field-'+hiddenId); if(fw) fw.classList.remove('has-error');
+}
+// 여러 교시가 저장된 경우 가장 이른 교시를 기준으로 정렬 (선택 시 appSettings.periods 순서대로 이어붙이므로 맨 앞이 가장 이름)
 function periodIdx(p){
   if(!p) return 999;
-  const key = p.toString().replace(/\s*\(.*\)/,'').trim();
-  const i = appSettings.periods.indexOf(key);
+  const first = p.toString().split(',')[0].replace(/\s*\(.*\)/,'').trim();
+  const i = appSettings.periods.indexOf(first);
   return i===-1?999:i;
 }
 

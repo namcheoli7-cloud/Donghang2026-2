@@ -1,0 +1,635 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#1B2742">
+<title>지각 체크 · 2학년</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+KR:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+:root{
+  --ink:#1B2742; --ink-2:#44506A; --muted:#707A8E;
+  --bg:#EEF1F6; --surface:#FFFFFF; --line:#D8DEE8;
+  --bell:#FFC72C; --bell-dk:#E5A800;
+  --blue:#2A5AA8; --blue-lt:#E3ECFA;
+  --amber:#9A5B00; --amber-lt:#FFF1D2;
+  --red:#C2362A; --red-lt:#FCE9E6;
+  --ok:#1E6B3A; --ok-lt:#DCF1E4;
+  --r-s:8px; --r-m:12px; --r-l:18px;
+  box-sizing:border-box;
+  padding-top:env(safe-area-inset-top,0px);
+  padding-bottom:env(safe-area-inset-bottom,0px);
+}
+html{height:100%}
+body{
+  font-family:'IBM Plex Sans KR',-apple-system,BlinkMacSystemFont,'Apple SD Gothic Neo','Malgun Gothic',sans-serif;
+  background:var(--bg); color:var(--ink); font-size:16px; line-height:1.55;
+  -webkit-font-smoothing:antialiased; min-height:100%;
+  font-variant-numeric:tabular-nums;
+}
+button{font:inherit;color:inherit;cursor:pointer;border:0;background:none}
+:focus-visible{outline:3px solid var(--blue);outline-offset:2px}
+.wrap{max-width:560px;margin:0 auto;padding:0 16px 40px}
+
+/* 헤더 */
+.top{background:var(--ink);color:#fff}
+.top-in{max-width:560px;margin:0 auto;padding:14px 16px 0}
+.top-row{display:flex;align-items:baseline;justify-content:space-between;gap:12px}
+.brand{font-size:21px;font-weight:700;letter-spacing:-.4px}
+.brand small{font-size:14px;font-weight:500;color:var(--bell);margin-left:6px}
+.clock{font-size:14px;color:#C5CDDD;white-space:nowrap}
+.acct{display:flex;align-items:center;gap:8px;font-size:12px;color:#9AA6BD;margin-top:2px;min-height:18px}
+.acct button{color:#C5CDDD;text-decoration:underline;font-size:12px}
+.demo-pill{background:var(--bell);color:var(--ink);font-weight:700;border-radius:99px;padding:1px 8px;font-size:11px}
+.tabs{display:flex;gap:4px;margin-top:12px}
+.tab{flex:1;padding:11px 0 12px;font-size:15px;font-weight:600;color:#AEB8CC;border-radius:10px 10px 0 0;position:relative}
+.tab.on{background:var(--bg);color:var(--ink)}
+.tab .n{display:inline-block;min-width:20px;margin-left:6px;padding:0 6px;border-radius:99px;background:var(--red);color:#fff;font-size:12px;line-height:20px}
+.tab .n:empty{display:none}
+
+.panel{display:none;padding-top:18px}
+.panel.on{display:block}
+
+/* 입력 */
+.entry{background:var(--surface);border-radius:var(--r-l);padding:16px;box-shadow:0 1px 0 var(--line)}
+.q{width:100%;border:2px solid var(--line);border-radius:var(--r-m);padding:14px 16px;font:inherit;font-size:26px;font-weight:600;letter-spacing:-.3px;color:var(--ink);background:#FBFCFE;transition:border-color .12s}
+.q::placeholder{color:#B5BCCA;font-weight:500}
+.q:focus{outline:none;border-color:var(--ink);background:#fff}
+.pick{min-height:8px}
+.note{font-size:14px;padding:10px 2px 2px;color:var(--muted)}
+.note.warn{color:var(--amber);font-weight:600}
+.note.err{color:var(--red);font-weight:600}
+.opts{display:flex;flex-direction:column;gap:6px;margin-top:8px}
+.opt{display:flex;align-items:center;gap:12px;width:100%;text-align:left;padding:10px 12px;border:1.5px solid var(--line);border-radius:var(--r-m);background:#fff}
+.opt:hover{border-color:var(--ink-2)}
+.opt.hl{border-color:var(--blue);background:var(--blue-lt)}
+.opt.sel{border-color:var(--ink);background:var(--ink);color:#fff}
+.opt .num{font-weight:700;width:58px}
+.opt .nm{font-weight:600;flex:1}
+.opt .cls{font-size:13px;color:var(--muted)}
+.opt.sel .cls{color:#C5CDDD}
+
+.card{display:flex;align-items:center;gap:14px;margin-top:12px;padding:12px 14px;border-radius:var(--r-m);background:var(--blue-lt)}
+.card .who{flex:1;min-width:0}
+.card .who b{font-size:20px;font-weight:700;letter-spacing:-.3px}
+.card .who span{display:block;font-size:14px;color:var(--ink-2)}
+.card .sofar{text-align:right;font-size:13px;color:var(--ink-2);white-space:nowrap}
+.card .sofar b{display:block;font-size:22px;color:var(--ink);line-height:1.2}
+.card .sofar.hot b{color:var(--red)}
+
+.go{margin-top:12px;width:100%;padding:17px;border-radius:var(--r-m);background:var(--bell);color:var(--ink);font-size:19px;font-weight:700;letter-spacing:-.2px;box-shadow:inset 0 -3px 0 var(--bell-dk);transition:transform .06s}
+.go:active{transform:translateY(1px);box-shadow:inset 0 -1px 0 var(--bell-dk)}
+.go:disabled{background:#E6E9EF;color:#9AA2B2;box-shadow:none;cursor:default}
+.go.armed{background:var(--red);color:#fff;box-shadow:inset 0 -3px 0 #8E2319;font-size:16px}
+.go kbd{font:inherit;font-size:13px;font-weight:500;opacity:.6;margin-left:6px}
+@media (hover:none){.go kbd{display:none}}
+
+/* 방금 기록 */
+.saved{margin-top:14px;display:flex;align-items:center;gap:12px;padding:12px 14px;border-radius:var(--r-m);background:var(--ok-lt);color:var(--ok)}
+.saved.hot{background:var(--red-lt);color:var(--red)}
+.saved .stamp{flex-shrink:0;width:54px;height:54px;border-radius:50%;border:2.5px solid currentColor;display:flex;align-items:baseline;justify-content:center;padding-top:13px;font-weight:700;font-size:22px;line-height:1;transform:rotate(-8deg)}
+.saved .stamp small{font-size:11px;font-weight:600;margin-left:1px}
+.saved .txt{flex:1;min-width:0;color:var(--ink)}
+.saved .txt b{font-size:17px}
+.saved .txt span{display:block;font-size:13px;color:var(--ink-2)}
+.saved button{font-size:14px;font-weight:600;padding:8px 10px;border-radius:var(--r-s);background:rgba(255,255,255,.7);color:var(--ink)}
+.saved.pop .stamp{animation:stamp .28s ease-out}
+@keyframes stamp{from{transform:scale(1.6) rotate(-8deg);opacity:0}to{transform:scale(1) rotate(-8deg);opacity:1}}
+
+/* 목록 */
+.sec{display:flex;align-items:baseline;justify-content:space-between;margin:26px 2px 8px}
+.sec h2{font-size:16px;font-weight:700}
+.sec span{font-size:13px;color:var(--muted)}
+.list{background:var(--surface);border-radius:var(--r-l);overflow:hidden}
+.row{display:flex;align-items:center;gap:12px;padding:11px 14px;border-top:1px solid #EDF0F5}
+.row:first-child{border-top:0}
+.row .t{width:46px;font-size:14px;color:var(--muted)}
+.row .nm{flex:1;min-width:0;font-weight:600}
+.row .nm small{font-weight:400;font-size:13px;color:var(--muted);margin-left:6px}
+.cnt{flex-shrink:0;min-width:40px;text-align:center;font-size:13px;font-weight:700;border-radius:99px;padding:2px 8px;background:#EEF1F6;color:var(--ink-2)}
+.cnt.c2{background:var(--amber-lt);color:var(--amber)}
+.cnt.c3{background:var(--red);color:#fff}
+.del{font-size:13px;color:var(--muted);padding:6px 4px;text-decoration:underline}
+.del:hover{color:var(--red)}
+.empty{padding:28px 16px;text-align:center;color:var(--muted);font-size:14px}
+
+/* 현황 */
+.seg{display:grid;grid-template-columns:repeat(4,1fr);gap:4px;background:#DDE2EB;padding:4px;border-radius:var(--r-m)}
+.seg button{padding:10px 0;border-radius:9px;font-size:14px;font-weight:600;color:var(--ink-2)}
+.seg button.on{background:#fff;color:var(--ink);box-shadow:0 1px 2px rgba(27,39,66,.12)}
+.seg button em{font-style:normal;font-weight:500;color:var(--muted);margin-left:4px}
+.st{background:var(--surface);border-radius:var(--r-l);overflow:hidden;margin-top:14px}
+.st details{border-top:1px solid #EDF0F5}
+.st details:first-child{border-top:0}
+.st summary{list-style:none;display:flex;align-items:center;gap:14px;padding:13px 14px;cursor:pointer}
+.st summary::-webkit-details-marker{display:none}
+.big{flex-shrink:0;width:44px;height:44px;border-radius:12px;display:grid;place-items:center;font-size:20px;font-weight:700;background:#EEF1F6;color:var(--ink-2)}
+.big.c2{background:var(--amber-lt);color:var(--amber)}
+.big.c3{background:var(--red);color:#fff}
+.st .who{flex:1;min-width:0}
+.st .who b{font-size:17px}
+.st .who span{display:block;font-size:13px;color:var(--muted)}
+.chev{color:var(--muted);transition:transform .15s}
+details[open] .chev{transform:rotate(90deg)}
+.hist{padding:0 14px 12px 72px}
+.hist li{list-style:none;display:flex;align-items:center;gap:10px;padding:6px 0;font-size:14px;border-top:1px dashed #E3E7EE}
+.hist li:first-child{border-top:0}
+.hist .i{width:22px;color:var(--muted);font-size:12px}
+.hist .d{flex:1}
+.hist .by{font-size:12px;color:var(--muted)}
+.rs{font-size:15px;font-weight:600}
+textarea{width:100%;min-height:180px;margin-top:10px;border:2px solid var(--line);border-radius:var(--r-m);padding:12px;font:inherit;font-size:14px;line-height:1.6;color:var(--ink);background:#FBFCFE;resize:vertical}
+textarea:focus{outline:none;border-color:var(--ink)}
+.go.danger{background:#fff;color:var(--red);border:2px solid var(--red);box-shadow:none;font-size:16px;padding:13px}
+.nudge{margin-top:12px;padding:12px 14px;border-radius:var(--r-m);background:var(--amber-lt);color:var(--amber);font-size:14px;font-weight:600}
+.nudge button{text-decoration:underline;font-weight:700;color:inherit}
+
+/* 게이트 */
+.gate{display:none;min-height:100vh;flex-direction:column;align-items:center;justify-content:center;text-align:center;padding:32px 24px;gap:12px}
+.gate.on{display:flex}
+.gate h1{font-size:22px;letter-spacing:-.4px}
+.gate p{color:var(--ink-2);max-width:360px;font-size:15px}
+.gate pre{text-align:left;background:var(--ink);color:#E8ECF4;border-radius:var(--r-m);padding:14px;font-size:12px;overflow-x:auto;max-width:100%}
+.btn{padding:13px 22px;border-radius:var(--r-m);font-weight:700;font-size:16px;background:var(--ink);color:#fff}
+.btn.ghost{background:none;color:var(--ink-2);text-decoration:underline;font-weight:500;font-size:14px;padding:6px}
+.spin{width:30px;height:30px;border:3px solid var(--line);border-top-color:var(--ink);border-radius:50%;animation:sp .8s linear infinite}
+@keyframes sp{to{transform:rotate(360deg)}}
+#app{display:none}
+
+.toast{position:fixed;left:50%;bottom:calc(20px + env(safe-area-inset-bottom,0px));transform:translate(-50%,20px);opacity:0;pointer-events:none;background:var(--ink);color:#fff;padding:11px 18px;border-radius:99px;font-size:14px;font-weight:600;transition:.2s;max-width:calc(100% - 32px)}
+.toast.on{opacity:1;transform:translate(-50%,0)}
+.toast.err{background:var(--red)}
+.shake{animation:shk .3s}
+@keyframes shk{25%{transform:translateX(-5px)}75%{transform:translateX(5px)}}
+@media (prefers-reduced-motion:reduce){*{animation:none!important;transition:none!important}}
+</style>
+</head>
+<body>
+
+<!-- 게이트 화면 -->
+<div class="gate" id="g-loading"><div class="spin"></div><p>불러오는 중…</p></div>
+<div class="gate" id="g-rules">
+  <h1>저장소 권한이 아직 없습니다</h1>
+  <p>Firebase 콘솔 → Firestore → donghang 데이터베이스 → 규칙에 아래 두 줄을 추가하고 게시해 주세요.</p>
+<pre>match /late_config/{id}  { allow read, write: if true; }
+match /late_records/{id} { allow read, write: if true; }</pre>
+  <button class="btn" onclick="location.reload()">새로고침</button>
+  <button class="btn ghost" data-demo>체험 모드로 열기</button>
+</div>
+<div class="gate" id="g-offline">
+  <h1>서버에 연결할 수 없습니다</h1>
+  <p>인터넷 연결을 확인하고 새로고침하세요.</p>
+  <button class="btn" onclick="location.reload()">새로고침</button>
+  <button class="btn ghost" data-demo>체험 모드로 열기</button>
+</div>
+
+<!-- 앱 -->
+<div id="app">
+  <header class="top">
+    <div class="top-in">
+      <div class="top-row">
+        <div class="brand">지각 체크<small>2학년</small></div>
+        <div class="clock" id="clock"></div>
+      </div>
+      <div class="acct" id="acct"></div>
+      <nav class="tabs" role="tablist">
+        <button class="tab on" data-tab="rec" role="tab">기록</button>
+        <button class="tab" data-tab="stat" role="tab">누적 현황<span class="n" id="hotN"></span></button>
+        <button class="tab" data-tab="set" role="tab">명렬</button>
+      </nav>
+    </div>
+  </header>
+
+  <main class="wrap">
+    <!-- 기록 탭 -->
+    <section class="panel on" id="p-rec">
+      <div class="entry">
+        <input class="q" id="q" type="text" placeholder="이름 입력" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false" enterkeyhint="done" aria-label="학생 이름 또는 학번">
+        <div class="pick" id="pick"></div>
+        <button class="go" id="go" disabled>기록하기<kbd>Enter</kbd></button>
+        <div id="nudgeSlot"></div>
+      </div>
+      <div id="saved"></div>
+
+      <div class="sec"><h2>오늘 기록</h2><span id="todayN"></span></div>
+      <div class="list" id="today"></div>
+    </section>
+
+    <!-- 현황 탭 -->
+    <section class="panel" id="p-stat">
+      <div class="seg" id="seg">
+        <button data-f="3" class="on">3회 이상<em></em></button>
+        <button data-f="2">2회<em></em></button>
+        <button data-f="1">1회<em></em></button>
+        <button data-f="all">전체<em></em></button>
+      </div>
+      <div class="st" id="st"></div>
+    </section>
+
+    <!-- 명렬 탭 -->
+    <section class="panel" id="p-set">
+      <div class="entry">
+        <p class="rs" id="rosterInfo"></p>
+        <p class="note">엑셀에서 <b>학번·이름</b> 칸(또는 학년·반·번호·이름 칸)을 복사해 그대로 붙여넣으세요. 2학년만 등록되고, 올리면 기존 명렬이 새 명렬로 바뀝니다. 지각 기록은 그대로 남아요.</p>
+        <textarea id="rosterText" placeholder="20101&#9;김민준&#10;20102&#9;이서연&#10;…" spellcheck="false"></textarea>
+        <p class="note" id="rosterPreview"></p>
+        <button class="go" id="rosterSave" disabled>명렬 올리기</button>
+      </div>
+      <div class="sec"><h2>기록 초기화</h2><span>학기가 바뀔 때</span></div>
+      <div class="entry">
+        <p class="note">모든 지각 기록을 지웁니다. 되돌릴 수 없어요.</p>
+        <button class="go danger" id="resetAll">전체 기록 지우기</button>
+      </div>
+    </section>
+  </main>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script type="module">
+// ─────────────────────────────────────────────
+// 지각 체크 전용 저장소 (로그인 없이 링크만 있으면 사용)
+//  - 명렬:   late_config/roster 문서 하나 { list: {학번: 이름} }
+//  - 지각 기록: late_records 컬렉션
+//  동행프로그램의 데이터(roster, records 등)는 읽지도 쓰지도 않습니다.
+// ─────────────────────────────────────────────
+const firebaseConfig = {
+  apiKey: "AIzaSyB8_ABUYRet6Qb1jlcjYGPYRSXJ4MCnRc4",
+  authDomain: "dodgeball-efbff.firebaseapp.com",
+  projectId: "dodgeball-efbff",
+  storageBucket: "dodgeball-efbff.firebasestorage.app",
+  messagingSenderId: "375748754364",
+  appId: "1:375748754364:web:2a49b5137784a68c6f89b9"
+};
+const FB = 'https://www.gstatic.com/firebasejs/10.13.0/';
+const DB_ID = 'donghang';     // Firestore 데이터베이스 이름 (컬렉션은 late_ 로 시작해 동행과 겹치지 않음)
+const RECENT_GUARD_MIN = 10;   // 같은 학생을 이 시간(분) 안에 다시 기록하면 한 번 더 확인
+const HOT = 3;                 // 누적 경고 기준
+
+const $ = s => document.querySelector(s);
+const $$ = s => document.querySelectorAll(s);
+const esc = s => String(s ?? '').replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+const pad = n => String(n).padStart(2,'0');
+const DOW = ['일','월','화','수','목','금','토'];
+const ymd = d => `${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())}`;
+const hm  = d => `${pad(d.getHours())}:${pad(d.getMinutes())}`;
+const mdw = s => { const [y,m,d] = s.split('-').map(Number); return `${m}/${d} (${DOW[new Date(y,m-1,d).getDay()]})`; };
+const clsOf = num => `${parseInt(num.slice(1,3),10)}반 ${parseInt(num.slice(3),10)}번`;
+const tier = c => c >= HOT ? 'c3' : c === 2 ? 'c2' : '';
+
+const S = {
+  roster: {}, records: [],
+  mode: 'empty', options: [], hl: -1, selected: null, armed: null,
+  saved: null, filter: '3', open: new Set(), composing: false, pendingEnter: false
+};
+let backend = null;
+
+// ── 파생 데이터 ──
+function byNum(){
+  const m = {};
+  for (const r of S.records) (m[r.num] ||= []).push(r);
+  for (const k in m) m[k].sort((a,b) => a.ts - b.ts);
+  return m;
+}
+const rosterList = () => Object.keys(S.roster).sort().map(num => ({ num, name: S.roster[num] }));
+
+// ── 화면 전환 ──
+function gate(id){
+  $$('.gate').forEach(g => g.classList.remove('on'));
+  $('#app').style.display = id ? 'none' : 'block';
+  if (id) $('#g-'+id).classList.add('on');
+}
+function toast(msg, type){
+  const t = $('#toast'); t.textContent = msg; t.className = 'toast on ' + (type||'');
+  clearTimeout(toast._t); toast._t = setTimeout(() => t.classList.remove('on'), 2600);
+}
+function tick(){
+  const d = new Date();
+  $('#clock').textContent = `${d.getMonth()+1}월 ${d.getDate()}일 (${DOW[d.getDay()]}) ${hm(d)}`;
+}
+
+// ── 이름 → 학번 찾기 ──
+function lookup(){
+  const q = $('#q').value.replace(/\s+/g,'');
+  S.options = []; S.hl = -1; S.selected = null; S.armed = null;
+  if (!q){ S.mode = 'empty'; return renderPick(); }
+  const all = rosterList();
+  if (/^\d+$/.test(q)){
+    if (q.length === 5 && S.roster[q]){ S.selected = q; S.mode = 'one'; }
+    else { S.options = all.filter(e => e.num.startsWith(q)).slice(0,6); S.mode = S.options.length ? 'partial' : 'none'; }
+  } else {
+    const exact = all.filter(e => e.name === q);
+    if (exact.length === 1){ S.selected = exact[0].num; S.mode = 'one'; }
+    else if (exact.length > 1){ S.options = exact; S.mode = 'dup'; }
+    else {
+      S.options = all.filter(e => e.name.includes(q)).slice(0,6);
+      S.mode = S.options.length ? 'partial' : 'none';
+    }
+  }
+  renderPick();
+}
+
+function renderPick(){
+  const bn = byNum();
+  let h = '';
+  if (S.mode === 'none' && !S.composing)
+    h += `<p class="note err">2학년 명단에 없는 이름이에요. 다시 확인해 주세요.</p>`;
+  if (S.mode === 'dup')
+    h += `<p class="note warn">⚠ 동명이인 ${S.options.length}명 — 학번을 골라 주세요.</p>`;
+  if (S.mode === 'partial')
+    h += `<p class="note">이 학생인가요?</p>`;
+  if (S.options.length && (S.mode === 'dup' || !S.selected)){
+    h += '<div class="opts">' + S.options.map((o,i) => {
+      const c = (bn[o.num]||[]).length;
+      return `<button class="opt ${S.selected===o.num?'sel':''} ${S.hl===i?'hl':''}" data-num="${o.num}">
+        <span class="num">${o.num}</span><span class="nm">${esc(o.name)}</span>
+        <span class="cls">${clsOf(o.num)}</span>${c?`<span class="cnt ${tier(c)}">${c}회</span>`:''}</button>`;
+    }).join('') + '</div>';
+  }
+  if (S.selected){
+    const recs = bn[S.selected] || [], c = recs.length, last = recs[c-1];
+    h += `<div class="card">
+      <div class="who"><b>${esc(S.roster[S.selected])}</b><span>${S.selected} · ${clsOf(S.selected)}</span></div>
+      <div class="sofar ${c>=HOT?'hot':''}"><b>${c}회</b>${last ? '최근 '+mdw(last.date)+' '+last.time : '첫 지각'}</div>
+    </div>`;
+  }
+  $('#pick').innerHTML = h;
+  $$('#pick .opt').forEach(b => b.onclick = () => { choose(b.dataset.num); $('#q').focus(); });
+
+  const go = $('#go');
+  go.disabled = !S.selected;
+  go.classList.toggle('armed', !!S.armed && S.armed === S.selected);
+  go.innerHTML = (S.armed && S.armed === S.selected)
+    ? `${RECENT_GUARD_MIN}분 내 중복 · 한 번 더 누르면 추가`
+    : '기록하기<kbd>Enter</kbd>';
+}
+function choose(num){ S.selected = num; S.armed = null; renderPick(); }
+
+// ── 기록 ──
+function record(){
+  if (Date.now() - (S.lastAt||0) < 400) return;   // 한글 IME에서 Enter가 두 번 들어오는 경우 방지
+  if (!S.selected){
+    if (S.options.length === 1 && S.mode === 'partial') return choose(S.options[0].num);
+    if (S.hl >= 0 && S.options[S.hl]) return choose(S.options[S.hl].num);
+    const e = $('.entry'); e.classList.remove('shake'); void e.offsetWidth; e.classList.add('shake');
+    return;
+  }
+  const num = S.selected, name = S.roster[num];
+  const prev = byNum()[num] || [], last = prev[prev.length-1];
+  if (last && Date.now() - last.ts < RECENT_GUARD_MIN*60000 && S.armed !== num){
+    S.armed = num; return renderPick();
+  }
+  const now = new Date();
+  const rec = { num, name, ts: now.getTime(), date: ymd(now), time: hm(now), by: '' };
+  S.lastAt = Date.now();
+  const id = backend.add(rec);
+  S.saved = { id, num, name, count: prev.length + 1, time: rec.time, fresh: true };
+  $('#q').value = ''; lookup(); $('#q').focus();
+  renderSaved(); renderLists();
+}
+function undo(){
+  if (!S.saved) return;
+  backend.remove(S.saved.id);
+  toast(`${S.saved.name} 기록을 되돌렸어요.`);
+  S.saved = null; renderSaved(); $('#q').focus();
+}
+function removeRec(id){
+  const r = S.records.find(x => x.id === id); if (!r) return;
+  if (!confirm(`${r.name} (${r.num})\n${mdw(r.date)} ${r.time} 기록을 삭제할까요?`)) return;
+  if (S.saved && S.saved.id === id){ S.saved = null; renderSaved(); }
+  backend.remove(id); toast('삭제했어요.');
+}
+
+function renderSaved(){
+  const s = S.saved, el = $('#saved');
+  if (!s){ el.innerHTML = ''; return; }
+  const hot = s.count >= HOT;
+  el.innerHTML = `<div class="saved ${hot?'hot':''} ${s.fresh?'pop':''}">
+    <div class="stamp">${s.count}<small>회</small></div>
+    <div class="txt"><b>${esc(s.name)}</b> 기록됨 ${s.time}<span>${s.num} · ${clsOf(s.num)}${hot?' · 누적 '+HOT+'회 이상':''}</span></div>
+    <button id="undo">되돌리기</button></div>`;
+  s.fresh = false;
+  $('#undo').onclick = undo;
+}
+
+function renderLists(){
+  const bn = byNum();
+  // 오늘 기록
+  const today = ymd(new Date());
+  const tr = S.records.filter(r => r.date === today).sort((a,b) => b.ts - a.ts);
+  $('#todayN').textContent = tr.length ? `${new Set(tr.map(r=>r.num)).size}명 · ${tr.length}건` : '';
+  $('#today').innerHTML = tr.length ? tr.map(r => {
+    const nth = (bn[r.num]||[]).findIndex(x => x.id === r.id) + 1;
+    return `<div class="row"><span class="t">${r.time}</span>
+      <span class="nm">${esc(r.name)}<small>${clsOf(r.num)}</small></span>
+      <span class="cnt ${tier(nth)}">${nth}회</span>
+      <button class="del" data-del="${esc(r.id)}">삭제</button></div>`;
+  }).join('') : `<div class="empty">아직 오늘 기록이 없어요. 위에 이름을 입력하세요.</div>`;
+  $('#nudgeSlot').innerHTML = Object.keys(S.roster).length ? '' :
+    `<div class="nudge">등록된 명렬이 없어요. <button data-goto="set">명렬 탭</button>에서 먼저 올려 주세요.</div>`;
+  const rn = Object.keys(S.roster).length;
+  $('#rosterInfo').textContent = rn ? `현재 2학년 명렬 ${rn}명 등록됨` : '아직 명렬이 없습니다.';
+
+  // 누적 현황
+  const students = Object.keys(bn).map(num => {
+    const recs = bn[num];
+    return { num, name: S.roster[num] || recs[recs.length-1].name, recs, c: recs.length };
+  });
+  const n = { '3': 0, '2': 0, '1': 0, all: students.length };
+  students.forEach(s => n[s.c >= 3 ? '3' : String(s.c)]++);
+  $$('#seg button').forEach(b => b.querySelector('em').textContent = n[b.dataset.f]);
+  $('#hotN').textContent = n['3'] || '';
+
+  const f = S.filter;
+  const list = students
+    .filter(s => f === 'all' || (f === '3' ? s.c >= 3 : s.c === +f))
+    .sort((a,b) => b.c - a.c || b.recs[b.c-1].ts - a.recs[a.c-1].ts);
+  $('#st').innerHTML = list.length ? list.map(s => {
+    const last = s.recs[s.c-1];
+    return `<details data-num="${esc(s.num)}" ${S.open.has(s.num)?'open':''}>
+      <summary><span class="big ${tier(s.c)}">${s.c}</span>
+        <span class="who"><b>${esc(s.name)}</b><span>${s.num} · ${clsOf(s.num)} · 최근 ${mdw(last.date)} ${last.time}</span></span>
+        <span class="chev">›</span></summary>
+      <ul class="hist">${s.recs.map((r,i) => `<li><span class="i">${i+1}</span>
+        <span class="d">${mdw(r.date)} ${r.time}</span>${r.by?`<span class="by">${esc(r.by)}</span>`:''}
+        <button class="del" data-del="${esc(r.id)}">삭제</button></li>`).reverse().join('')}</ul>
+    </details>`;
+  }).join('') : `<div class="empty">${f==='3' ? '누적 3회 이상인 학생이 없어요.' : f==='all' ? '아직 기록이 없어요.' : f+'회인 학생이 없어요.'}</div>`;
+  $$('#st details').forEach(d => d.ontoggle = () => d.open ? S.open.add(d.dataset.num) : S.open.delete(d.dataset.num));
+}
+function renderAll(){ renderPick(); renderLists(); }
+
+// ── 이벤트 ──
+function bindUi(){
+  const q = $('#q');
+  q.addEventListener('input', lookup);
+  q.addEventListener('compositionstart', () => { S.composing = true; });
+  q.addEventListener('compositionend', () => {
+    S.composing = false; lookup();
+    if (S.pendingEnter){ S.pendingEnter = false; setTimeout(record, 0); }
+  });
+  q.addEventListener('keydown', e => {
+    if (e.key === 'Enter'){
+      e.preventDefault();
+      if (e.isComposing || e.keyCode === 229){ S.pendingEnter = true; return; } // 한글 조합 중 Enter
+      if (S.pendingEnter) return;
+      record();
+    } else if ((e.key === 'ArrowDown' || e.key === 'ArrowUp') && S.options.length){
+      e.preventDefault();
+      const L = S.options.length;
+      S.hl = e.key === 'ArrowDown' ? (S.hl + 1) % L : (S.hl - 1 + L) % L;
+      S.selected = S.options[S.hl].num; S.armed = null; renderPick();
+    } else if (e.key === 'Escape'){ q.value = ''; lookup(); }
+  });
+  $('#go').onclick = () => { record(); };
+  $$('.tab').forEach(t => t.onclick = () => goTab(t.dataset.tab));
+  document.addEventListener('click', e => { const g = e.target.closest('[data-goto]'); if (g) goTab(g.dataset.goto); });
+
+  // 명렬 붙여넣기
+  const ta = $('#rosterText');
+  ta.addEventListener('input', () => {
+    const r = parseRoster(ta.value);
+    const n = Object.keys(r.list).length;
+    $('#rosterPreview').innerHTML = !ta.value.trim() ? '' :
+      `<b>${n}명</b> 인식됨` + (r.skipped ? ` · 제외 ${r.skipped}줄 (2학년 학번이 아니거나 형식이 다름)` : '') +
+      (r.dupNums ? ` · 중복 학번 ${r.dupNums}개는 마지막 줄로 적용` : '');
+    $('#rosterSave').disabled = n === 0;
+  });
+  $('#rosterSave').onclick = async () => {
+    const r = parseRoster(ta.value), n = Object.keys(r.list).length;
+    if (!n) return;
+    const cur = Object.keys(S.roster).length;
+    if (cur && !confirm(`현재 명렬 ${cur}명을 새 명렬 ${n}명으로 바꿀까요?`)) return;
+    $('#rosterSave').disabled = true;
+    try { await backend.saveRoster(r.list); ta.value = ''; $('#rosterPreview').textContent = ''; toast(`명렬 ${n}명을 올렸어요.`); }
+    catch (e) { toast('명렬을 올리지 못했어요: '+e.message, 'err'); $('#rosterSave').disabled = false; }
+  };
+  $('#resetAll').onclick = async () => {
+    const n = S.records.length;
+    if (!n) return toast('지울 기록이 없어요.');
+    const typed = prompt(`지각 기록 ${n}건을 모두 지웁니다.\n계속하려면 '초기화'라고 입력하세요.`);
+    if (typed !== '초기화') return;
+    try { await backend.clearAll(S.records.map(r => r.id)); S.saved = null; renderSaved(); toast('모든 기록을 지웠어요.'); }
+    catch (e) { toast('지우지 못했어요: '+e.message, 'err'); }
+  };
+  $$('#seg button').forEach(b => b.onclick = () => {
+    S.filter = b.dataset.f; $$('#seg button').forEach(x => x.classList.toggle('on', x === b)); renderLists();
+  });
+  document.addEventListener('click', e => { const d = e.target.closest('[data-del]'); if (d){ e.preventDefault(); removeRec(d.dataset.del); } });
+  tick(); setInterval(tick, 15000);
+  setInterval(renderLists, 60000); // 자정 넘어가면 '오늘' 갱신
+}
+function goTab(name){
+  $$('.tab').forEach(x => x.classList.toggle('on', x.dataset.tab === name));
+  $$('.panel').forEach(p => p.classList.toggle('on', p.id === 'p-'+name));
+  if (name === 'rec') $('#q').focus();
+}
+// 한 줄에 한 학생: "학번 이름" 또는 "학년 반 번호 이름" (탭·쉼표·공백 구분, 다른 칸이 더 있어도 됨)
+function parseRoster(text){
+  const list = {}; let skipped = 0, dupNums = 0;
+  for (const raw of text.split(/\r?\n/)){
+    const line = raw.trim(); if (!line) continue;
+    let cells = line.split(/[\t,]/).map(c => c.trim()).filter(Boolean);
+    if (cells.length < 2) cells = line.split(/\s+/);
+    const isNum = c => /^\d+$/.test(c);
+    let num = cells.find(c => /^\d{5}$/.test(c));
+    if (!num){
+      const ns = cells.filter(isNum);
+      if (ns.length >= 3 && ns[0].length === 1) num = ns[0] + pad(+ns[1]) + pad(+ns[2]);
+    }
+    const name = (cells.find(c => !isNum(c) && /[가-힣A-Za-z]/.test(c) && !/^(학번|이름|성명|학년|반|번호)$/.test(c)) || '').replace(/\s+/g, '');
+    if (!num || !name || num[0] !== '2' || num.length !== 5){ skipped++; continue; }
+    if (list[num]) dupNums++;
+    list[num] = name;
+  }
+  return { list, skipped, dupNums };
+}
+let opened = false;
+function openApp(){
+  if (opened) return; opened = true;
+  gate(null); bindUi(); renderAll(); $('#q').focus();
+}
+$$('[data-demo]').forEach(b => b.onclick = () => { location.hash = 'demo'; location.reload(); });
+
+// ── 체험 모드 (저장되지 않음) ──
+function startDemo(){
+  const names = ['김민준','이서연','박지호','최서윤','정하준','강지우','윤도윤','임수아','한예준','오하은','서지안','신유나','김민준','권시우','이서연','황준서'];
+  names.forEach((n,i) => { S.roster[`2${pad(1 + (i % 8))}${pad(3 + i)}`] = n; });
+  const byName = n => Object.keys(S.roster).find(k => S.roster[k] === n);
+  const base = Date.now(); let k = 0;
+  [['박지호',3],['최서윤',4],['강지우',2],['임수아',1],['오하은',2],['정하준',2],['권시우',1]].forEach(([n,c], i) => {
+    const num = byName(n);
+    for (let j = 0; j < c; j++){
+      const d = new Date(base - (j+1)*2*86400000 - i*3600000);
+      S.records.push({ id:'d'+(k++), num, name:n, ts:d.getTime(), date:ymd(d), time:hm(d), by:'' });
+    }
+  });
+  $('#acct').innerHTML = `<span class="demo-pill">체험 모드</span> 새로고침하면 기록이 사라져요 <button id="exitDemo">실제 모드로</button>`;
+  $('#exitDemo').onclick = () => { location.hash = ''; location.reload(); };
+  backend = {
+    add(r){ const id = 'd'+Date.now()+Math.random().toString(36).slice(2,6); S.records.push({ ...r, id }); renderLists(); return id; },
+    remove(id){ S.records = S.records.filter(r => r.id !== id); renderAll(); },
+    async saveRoster(list){ S.roster = { ...list }; renderAll(); },
+    async clearAll(){ S.records = []; renderAll(); }
+  };
+  openApp();
+}
+
+// ── 실제 모드 (Firebase, 로그인 없음) ──
+async function startLive(){
+  gate('loading');
+  let A, F;
+  try { [A, F] = await Promise.all([import(FB+'firebase-app.js'), import(FB+'firebase-firestore.js')]); }
+  catch (e) { gate('offline'); return; }
+
+  const app = A.initializeApp(firebaseConfig, 'latecheck');
+  let db;
+  try { db = F.initializeFirestore(app, { localCache: F.persistentLocalCache({ tabManager: F.persistentMultipleTabManager() }) }, DB_ID); }
+  catch (e) { db = F.getFirestore(app, DB_ID); }
+  const col = F.collection(db, 'late_records');
+  const rosterDoc = F.doc(db, 'late_config', 'roster');
+
+  backend = {
+    add(r){
+      const ref = F.doc(col);
+      F.setDoc(ref, { num:r.num, name:r.name, date:r.date, time:r.time, clientTs:r.ts, createdAt:F.serverTimestamp() })
+        .catch(e => toast('저장하지 못했어요: '+e.message, 'err'));
+      return ref.id;
+    },
+    remove(id){ F.deleteDoc(F.doc(col, id)).catch(e => toast('삭제하지 못했어요: '+e.message, 'err')); },
+    saveRoster(list){ return F.setDoc(rosterDoc, { list, updatedAt: F.serverTimestamp() }); },
+    async clearAll(ids){
+      for (let i = 0; i < ids.length; i += 450){
+        const b = F.writeBatch(db);
+        ids.slice(i, i+450).forEach(id => b.delete(F.doc(col, id)));
+        await b.commit();
+      }
+    }
+  };
+
+  const ready = { roster:false, records:false };
+  const check = () => { if (ready.roster && ready.records) openApp(); };
+  const fail = err => {
+    if (err && err.code === 'permission-denied') gate('rules');
+    else toast('불러오지 못했어요: '+(err && err.message), 'err');
+  };
+  F.onSnapshot(rosterDoc, snap => {
+    const list = (snap.exists() && snap.data().list) || {};
+    const m = {}; for (const k in list) if (/^2\d{4}$/.test(k)) m[k] = String(list[k]||'').trim();
+    S.roster = m; ready.roster = true; check(); if (opened) renderAll();
+  }, fail);
+  F.onSnapshot(col, snap => {
+    S.records = snap.docs.map(d => { const x = d.data();
+      return { id:d.id, num:x.num, name:x.name, ts:x.clientTs||0, date:x.date, time:x.time, by:'' }; });
+    ready.records = true; check(); if (opened) renderAll();
+  }, fail);
+}
+
+location.hash === '#demo' ? startDemo() : startLive();
+
+</script>
+</body>
+</html>

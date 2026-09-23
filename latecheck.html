@@ -140,7 +140,20 @@ details[open] .chev{transform:rotate(90deg)}
 .hist .i{width:22px;color:var(--muted);font-size:12px}
 .hist .d{flex:1}
 .hist .by{font-size:12px;color:var(--muted)}
-.rs{font-size:15px;font-weight:600}
+.rs{font-size:16px;font-weight:700}
+.addrow{display:grid;grid-template-columns:96px 1fr auto;gap:8px;margin-top:10px}
+.addrow input,.search{width:100%;border:2px solid var(--line);border-radius:var(--r-m);padding:11px 12px;font:inherit;font-size:17px;font-weight:600;color:var(--ink);background:#FBFCFE}
+.addrow input:focus,.search:focus{outline:none;border-color:var(--ink);background:#fff}
+.addbtn{padding:0 18px;border-radius:var(--r-m);background:var(--ink);color:#fff;font-weight:700;font-size:16px}
+.search{font-size:15px;font-weight:500}
+.rlist{margin-top:8px;max-height:360px;overflow-y:auto}
+.rrow{display:flex;align-items:center;gap:10px;padding:9px 2px;border-top:1px solid #EDF0F5;font-size:15px}
+.rrow:first-child{border-top:0}
+.rrow .num{width:52px;font-weight:700}
+.rrow .nm{flex:1;font-weight:600}
+.rrow .cls{font-size:13px;color:var(--muted)}
+.rrow.new{background:var(--ok-lt)}
+.go.outline{margin-top:8px;background:#fff;color:var(--ink-2);border:1.5px solid var(--line);box-shadow:none;font-size:15px;padding:12px}
 textarea{width:100%;min-height:180px;margin-top:10px;border:2px solid var(--line);border-radius:var(--r-m);padding:12px;font:inherit;font-size:14px;line-height:1.6;color:var(--ink);background:#FBFCFE;resize:vertical}
 textarea:focus{outline:none;border-color:var(--ink)}
 .go.danger{background:#fff;color:var(--red);border:2px solid var(--red);box-shadow:none;font-size:16px;padding:13px}
@@ -232,12 +245,31 @@ match /late_records/{id} { allow read, write: if true; }</pre>
     <!-- 명렬 탭 -->
     <section class="panel" id="p-set">
       <div class="entry">
-        <p class="rs" id="rosterInfo"></p>
-        <p class="note">엑셀에서 <b>학번·이름</b> 칸(또는 학년·반·번호·이름 칸)을 복사해 그대로 붙여넣으세요. 2학년만 등록되고, 올리면 기존 명렬이 새 명렬로 바뀝니다. 지각 기록은 그대로 남아요.</p>
+        <p class="rs">학생 한 명 추가</p>
+        <p class="note">전학생은 여기서 추가하세요. 이미 있는 학번이면 이름이 바뀝니다.</p>
+        <div class="addrow">
+          <input id="addNum" type="text" inputmode="numeric" maxlength="5" placeholder="학번" autocomplete="off" aria-label="학번">
+          <input id="addName" type="text" placeholder="이름" autocomplete="off" spellcheck="false" aria-label="이름">
+          <button class="addbtn" id="addBtn">추가</button>
+        </div>
+        <p class="note" id="addHint"></p>
+      </div>
+
+      <div class="sec"><h2>명렬</h2><span id="rosterInfo"></span></div>
+      <div class="entry">
+        <input id="rosterSearch" class="search" type="search" placeholder="이름이나 학번으로 찾기" autocomplete="off" aria-label="명렬 검색">
+        <div class="rlist" id="rosterList"></div>
+      </div>
+
+      <div class="sec"><h2>여러 명 한꺼번에 올리기</h2><span>엑셀 복사·붙여넣기</span></div>
+      <div class="entry">
+        <p class="note">엑셀에서 <b>학번·이름</b> 칸(또는 학년·반·번호·이름 칸)을 복사해 붙여넣으세요. 2학년만 등록됩니다.</p>
         <textarea id="rosterText" placeholder="20101&#9;김민준&#10;20102&#9;이서연&#10;…" spellcheck="false"></textarea>
         <p class="note" id="rosterPreview"></p>
-        <button class="go" id="rosterSave" disabled>명렬 올리기</button>
+        <button class="go" id="rosterMerge" disabled>명렬에 추가하기</button>
+        <button class="go outline" id="rosterReplace" disabled>기존 명렬을 지우고 이것으로 바꾸기</button>
       </div>
+
       <div class="sec"><h2>기록 초기화</h2><span>학기가 바뀔 때</span></div>
       <div class="entry">
         <p class="note">모든 지각 기록을 지웁니다. 되돌릴 수 없어요.</p>
@@ -431,7 +463,8 @@ function renderLists(){
   $('#nudgeSlot').innerHTML = Object.keys(S.roster).length ? '' :
     `<div class="nudge">등록된 명렬이 없어요. <button data-goto="set">명렬 탭</button>에서 먼저 올려 주세요.</div>`;
   const rn = Object.keys(S.roster).length;
-  $('#rosterInfo').textContent = rn ? `현재 2학년 명렬 ${rn}명 등록됨` : '아직 명렬이 없습니다.';
+  $('#rosterInfo').textContent = rn ? `${rn}명` : '';
+  renderRoster();
 
   // 누적 현황
   const students = Object.keys(bn).map(num => {
@@ -459,6 +492,15 @@ function renderLists(){
     </details>`;
   }).join('') : `<div class="empty">${f==='3' ? '누적 3회 이상인 학생이 없어요.' : f==='all' ? '아직 기록이 없어요.' : f+'회인 학생이 없어요.'}</div>`;
   $$('#st details').forEach(d => d.ontoggle = () => d.open ? S.open.add(d.dataset.num) : S.open.delete(d.dataset.num));
+}
+function renderRoster(){
+  const q = ($('#rosterSearch').value || '').replace(/\s+/g, '');
+  const all = rosterList();
+  const rows = q ? all.filter(e => e.num.includes(q) || e.name.includes(q)) : all;
+  $('#rosterList').innerHTML = !all.length ? `<div class="empty">아직 명렬이 없어요. 아래에서 한꺼번에 올리거나 한 명씩 추가하세요.</div>`
+    : !rows.length ? `<div class="empty">'${esc(q)}'에 해당하는 학생이 없어요.</div>`
+    : rows.map(e => `<div class="rrow ${S.justAdded===e.num?'new':''}"><span class="num">${e.num}</span><span class="nm">${esc(e.name)}</span>
+        <span class="cls">${clsOf(e.num)}</span><button class="del" data-rdel="${e.num}">삭제</button></div>`).join('');
 }
 function renderAll(){ renderPick(); renderLists(); }
 
@@ -488,25 +530,63 @@ function bindUi(){
   $$('.tab').forEach(t => t.onclick = () => goTab(t.dataset.tab));
   document.addEventListener('click', e => { const g = e.target.closest('[data-goto]'); if (g) goTab(g.dataset.goto); });
 
-  // 명렬 붙여넣기
+  // 한 명 추가 (전학생)
+  const addNum = $('#addNum'), addName = $('#addName');
+  const addHint = () => {
+    const n = addNum.value.trim();
+    $('#addHint').textContent = /^2\d{4}$/.test(n) ? (S.roster[n] ? `지금 ${n}은 ${S.roster[n]} 학생이에요. 추가하면 이름이 바뀝니다.` : `${clsOf(n)} 자리가 비어 있어요.`)
+      : n.length === 5 ? '2학년 학번(2로 시작하는 5자리)만 넣을 수 있어요.' : '';
+  };
+  addNum.addEventListener('input', () => { addNum.value = addNum.value.replace(/\D/g, ''); addHint(); if (addNum.value.length === 5) addName.focus(); });
+  const doAdd = async () => {
+    const num = addNum.value.trim(), name = addName.value.replace(/\s+/g, '');
+    if (!/^2\d{4}$/.test(num)){ toast('2로 시작하는 5자리 학번을 넣어 주세요.', 'err'); return addNum.focus(); }
+    if (!name){ toast('이름을 넣어 주세요.', 'err'); return addName.focus(); }
+    if (S.roster[num] === name){ toast('이미 같은 이름으로 등록돼 있어요.'); return; }
+    if (S.roster[num] && !confirm(`${num} ${S.roster[num]} 학생을 '${name}'(으)로 바꿀까요?`)) return;
+    try {
+      await backend.mergeRoster({ [num]: name });
+      S.justAdded = num; addNum.value = ''; addName.value = ''; addHint(); renderRoster(); addNum.focus();
+      toast(`${num} ${name} 학생을 추가했어요.`);
+    } catch (e) { toast('추가하지 못했어요: '+e.message, 'err'); }
+  };
+  $('#addBtn').onclick = doAdd;
+  addName.addEventListener('keydown', e => { if (e.key === 'Enter' && !e.isComposing && e.keyCode !== 229){ e.preventDefault(); doAdd(); } });
+  addNum.addEventListener('keydown', e => { if (e.key === 'Enter'){ e.preventDefault(); addName.focus(); } });
+
+  // 명렬 검색·삭제 (전출)
+  $('#rosterSearch').addEventListener('input', renderRoster);
+  document.addEventListener('click', async e => {
+    const d = e.target.closest('[data-rdel]'); if (!d) return;
+    const num = d.dataset.rdel, name = S.roster[num];
+    if (!confirm(`${num} ${name} 학생을 명렬에서 뺄까요?\n(전출 등) 이 학생의 지각 기록은 그대로 남아요.`)) return;
+    try { await backend.removeStudent(num); toast(`${name} 학생을 명렬에서 뺐어요.`); }
+    catch (err) { toast('삭제하지 못했어요: '+err.message, 'err'); }
+  });
+
+  // 여러 명 붙여넣기
   const ta = $('#rosterText');
   ta.addEventListener('input', () => {
-    const r = parseRoster(ta.value);
-    const n = Object.keys(r.list).length;
-    $('#rosterPreview').innerHTML = !ta.value.trim() ? '' :
-      `<b>${n}명</b> 인식됨` + (r.skipped ? ` · 제외 ${r.skipped}줄 (2학년 학번이 아니거나 형식이 다름)` : '') +
-      (r.dupNums ? ` · 중복 학번 ${r.dupNums}개는 마지막 줄로 적용` : '');
-    $('#rosterSave').disabled = n === 0;
-  });
-  $('#rosterSave').onclick = async () => {
     const r = parseRoster(ta.value), n = Object.keys(r.list).length;
-    if (!n) return;
+    const fresh = Object.keys(r.list).filter(k => !S.roster[k]).length;
+    const changed = Object.keys(r.list).filter(k => S.roster[k] && S.roster[k] !== r.list[k]).length;
+    $('#rosterPreview').innerHTML = !ta.value.trim() ? '' :
+      `<b>${n}명</b> 인식됨 · 새 학생 ${fresh}명` + (changed ? ` · 이름 바뀜 ${changed}명` : '') +
+      (r.skipped ? ` · 제외 ${r.skipped}줄` : '') + (r.dupNums ? ` · 중복 학번 ${r.dupNums}개` : '');
+    $('#rosterMerge').disabled = $('#rosterReplace').disabled = n === 0;
+  });
+  const bulk = async replace => {
+    const r = parseRoster(ta.value), n = Object.keys(r.list).length; if (!n) return;
     const cur = Object.keys(S.roster).length;
-    if (cur && !confirm(`현재 명렬 ${cur}명을 새 명렬 ${n}명으로 바꿀까요?`)) return;
-    $('#rosterSave').disabled = true;
-    try { await backend.saveRoster(r.list); ta.value = ''; $('#rosterPreview').textContent = ''; toast(`명렬 ${n}명을 올렸어요.`); }
-    catch (e) { toast('명렬을 올리지 못했어요: '+e.message, 'err'); $('#rosterSave').disabled = false; }
+    if (replace && cur && !confirm(`지금 명렬 ${cur}명을 모두 지우고 ${n}명으로 바꿀까요?\n지각 기록은 그대로 남아요.`)) return;
+    try {
+      await (replace ? backend.saveRoster(r.list) : backend.mergeRoster(r.list));
+      ta.value = ''; ta.dispatchEvent(new Event('input'));
+      toast(replace ? `명렬을 ${n}명으로 바꿨어요.` : `${n}명을 명렬에 반영했어요.`);
+    } catch (e) { toast('명렬을 올리지 못했어요: '+e.message, 'err'); }
   };
+  $('#rosterMerge').onclick = () => bulk(false);
+  $('#rosterReplace').onclick = () => bulk(true);
   $('#resetAll').onclick = async () => {
     const n = S.records.length;
     if (!n) return toast('지울 기록이 없어요.');
@@ -573,6 +653,8 @@ function startDemo(){
     add(r){ const id = 'd'+Date.now()+Math.random().toString(36).slice(2,6); S.records.push({ ...r, id }); renderLists(); return id; },
     remove(id){ S.records = S.records.filter(r => r.id !== id); renderAll(); },
     async saveRoster(list){ S.roster = { ...list }; renderAll(); },
+    async mergeRoster(list){ S.roster = { ...S.roster, ...list }; renderAll(); },
+    async removeStudent(num){ delete S.roster[num]; renderAll(); },
     async clearAll(){ S.records = []; renderAll(); }
   };
   openApp();
@@ -601,6 +683,8 @@ async function startLive(){
     },
     remove(id){ F.deleteDoc(F.doc(col, id)).catch(e => toast('삭제하지 못했어요: '+e.message, 'err')); },
     saveRoster(list){ return F.setDoc(rosterDoc, { list, updatedAt: F.serverTimestamp() }); },
+    mergeRoster(list){ return F.setDoc(rosterDoc, { list, updatedAt: F.serverTimestamp() }, { merge: true }); },
+    removeStudent(num){ return F.updateDoc(rosterDoc, { ['list.'+num]: F.deleteField(), updatedAt: F.serverTimestamp() }); },
     async clearAll(ids){
       for (let i = 0; i < ids.length; i += 450){
         const b = F.writeBatch(db);

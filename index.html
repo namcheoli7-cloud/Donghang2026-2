@@ -213,7 +213,24 @@ body {
   .rec-content { color: #000; border-left-color: #666; font-size: 10px; line-height: 1.5; padding-left: 8px; margin-bottom: 4px; }
   .rec-footer { font-size: 9px; }
   .print-hide-teacher .rec-footer { display: none !important; }
+  /* 학년별·학급별 인쇄: 화면 전체를 숨기고 전용 출력 영역(#printArea)만 인쇄 */
+  body.print-custom #appRoot { display: none !important; }
+  body.print-custom #printArea { display: block !important; }
 }
+/* ── 학년별·학급별 인쇄/엑셀 (추가 기능) ── */
+#printArea { display: none; }
+.view-toolbar { display: flex; align-items: center; justify-content: space-between; gap: 8px; flex-wrap: wrap; margin-bottom: 12px; }
+.view-toolbar .mode-toggle { display: flex; border: 1.5px solid var(--gray2); border-radius: var(--radius-sm); overflow: hidden; width: fit-content; }
+.view-toolbar .mode-toggle .filter-chip { border: none; border-radius: 0; }
+.view-toolbar .tool-btns { display: flex; gap: 6px; }
+.btn-print-view { background: var(--primary); color: #fff; border-color: var(--primary); }
+.btn-excel-view { background: var(--ok); color: #fff; border-color: var(--ok); }
+.print-title { font-size: 15px; font-weight: 800; margin-bottom: 8px; color: #000; }
+.print-sub { font-size: 10px; color: #555; margin-bottom: 8px; }
+.print-rank-table { width: 100%; border-collapse: collapse; font-size: 11px; color: #000; }
+.print-rank-table th, .print-rank-table td { border: 1px solid #999; padding: 4px 6px; text-align: center; }
+.print-rank-table th { background: #eee; font-weight: 800; }
+.print-rank-table td.left { text-align: left; }
 </style>
 </head>
 <body>
@@ -413,6 +430,16 @@ body {
           <div class="grade-section"><div class="grade-label">3학년</div><div class="class-grid" id="grid3"></div></div>
         </div>
       </div>
+      <div class="view-toolbar">
+        <div class="mode-toggle">
+          <button type="button" class="filter-chip ac" id="classModeRecordsBtn">📋 전체 기록</button>
+          <button type="button" class="filter-chip" id="classModeRankBtn">🏆 누적 순위</button>
+        </div>
+        <div class="tool-btns">
+          <button type="button" class="btn-refresh btn-print-view" id="classPrintBtn">🖨️ 출력</button>
+          <button type="button" class="btn-refresh btn-excel-view" id="classExcelBtn">📊 엑셀 다운로드</button>
+        </div>
+      </div>
       <div id="classResult"><div class="state-msg"><span class="ico">🏫</span>학급을 선택하면 학생별 누적 현황이 표시됩니다.</div></div>
     </div>
 
@@ -428,9 +455,15 @@ body {
           </div>
         </div>
       </div>
-      <div style="display:flex;border:1.5px solid var(--gray2);border-radius:var(--radius-sm);overflow:hidden;width:fit-content;margin-bottom:12px;">
-        <button type="button" class="filter-chip ac" id="gradeModeRecordsBtn" style="border:none;border-radius:0;">📋 전체 기록</button>
-        <button type="button" class="filter-chip" id="gradeModeRankBtn" style="border:none;border-radius:0;">🏆 누적 순위</button>
+      <div class="view-toolbar">
+        <div class="mode-toggle">
+          <button type="button" class="filter-chip ac" id="gradeModeRecordsBtn">📋 전체 기록</button>
+          <button type="button" class="filter-chip" id="gradeModeRankBtn">🏆 누적 순위</button>
+        </div>
+        <div class="tool-btns">
+          <button type="button" class="btn-refresh btn-print-view" id="gradePrintBtn">🖨️ 출력</button>
+          <button type="button" class="btn-refresh btn-excel-view" id="gradeExcelBtn">📊 엑셀 다운로드</button>
+        </div>
       </div>
       <div id="gradeResult"><div class="state-msg"><span class="ico">📋</span>학년을 선택하면 전체 기록이 시간순으로 표시됩니다.</div></div>
       <div class="pagination" id="gradePagination"></div>
@@ -591,6 +624,9 @@ body {
   </div>
 
 </div>
+
+<!-- 학년별·학급별 인쇄 전용 영역 (화면에는 보이지 않고 인쇄할 때만 나타남) -->
+<div id="printArea"></div>
 
 <div class="toast" id="toast"></div>
 
@@ -781,6 +817,12 @@ function initUiOnce(){
   document.querySelectorAll('.grade-chip').forEach(b=> b.addEventListener('click', ()=>selectGrade(b.dataset.grade,b)));
   document.getElementById('gradeModeRecordsBtn').addEventListener('click', ()=>setGradeViewMode('records'));
   document.getElementById('gradeModeRankBtn').addEventListener('click', ()=>setGradeViewMode('rank'));
+  document.getElementById('gradePrintBtn').addEventListener('click', ()=>printView('grade'));
+  document.getElementById('gradeExcelBtn').addEventListener('click', ()=>exportView('grade'));
+  document.getElementById('classModeRecordsBtn').addEventListener('click', ()=>setClassViewMode('records'));
+  document.getElementById('classModeRankBtn').addEventListener('click', ()=>setClassViewMode('rank'));
+  document.getElementById('classPrintBtn').addEventListener('click', ()=>printView('class'));
+  document.getElementById('classExcelBtn').addEventListener('click', ()=>exportView('class'));
 
   document.getElementById('modalCloseBtn').addEventListener('click', ()=>document.getElementById('modalWrap').classList.remove('open'));
   document.getElementById('editModalBtn').addEventListener('click', openEditModal);
@@ -1241,6 +1283,7 @@ function pageRange(cur,total){ if(total<=7){ const a=[]; for(let i=1;i<=total;i+
 // ── 학급별 조회 ──
 function selectClass(grade,cls,el){
   document.querySelectorAll('.class-chip').forEach(c=>c.classList.remove('ac')); el.classList.add('ac');
+  if(classViewMode==='rank'){ renderClassRank(grade,cls); return; } // 누적 순위 보기 (추가 기능)
   const prefix=grade+(cls.length===1?'0':'')+cls, classLabel=`${grade}학년 ${cls}반`;
   const classRecs=allRecords.filter(item=>item.gradeClassNumber.substring(0,3)===prefix);
   if(!classRecs.length){ document.getElementById('classResult').innerHTML=`<div class="state-msg"><span class="ico">📭</span>${classLabel} 기록이 없습니다.</div>`; return; }
@@ -1515,9 +1558,14 @@ async function doAddStudent(){
 }
 
 // ── 인쇄 ──
+let printCtx=null; // null = 학생별 탭(기존 방식) / {label, recs} = 학년별·학급별 탭에서 연 경우
 function openPrintModal(){
+  printCtx=null;
   if(!filteredS.length){ showToast('⚠️ 먼저 학생을 조회해 주세요.','err'); return; }
-  const cats=getUniqCats(filteredS);
+  showPrintModalFor(filteredS);
+}
+function showPrintModalFor(recs){
+  const cats=getUniqCats(recs);
   const listEl=document.getElementById('printCatList');
   listEl.innerHTML=`<button class="filter-chip ac" id="pcat-전체">전체</button>`+cats.map(c=>`<button class="filter-chip ac" data-pcat="${esc(c)}">${esc(c)}</button>`).join('');
   document.getElementById('pcat-전체').onclick=()=>{ listEl.querySelectorAll('.filter-chip').forEach(b=>b.classList.add('ac')); };
@@ -1534,6 +1582,8 @@ function doPrint(){
   const selectedCats=[...document.querySelectorAll('#printCatList [data-pcat].ac')].map(b=>b.dataset.pcat);
   const hideTeacher=document.getElementById('printHideTeacher').checked;
   document.getElementById('printModal').classList.remove('open');
+  if(printCtx){ printCustomRecords(printCtx, selectedCats, hideTeacher); return; } // 학년별·학급별
+  document.body.classList.remove('print-custom'); // 학생별 탭은 기존 방식 그대로
   const printRecs=filteredS.filter(r=> selectedCats.length===0 || selectedCats.includes(r.category));
   if(!printRecs.length){ showToast('⚠️ 선택한 유형의 기록이 없습니다.','err'); return; }
   const printArea=document.getElementById('studentList');
@@ -1570,6 +1620,158 @@ function exportToExcel(){
   const stamp = `${now.getFullYear()}${String(now.getMonth()+1).padStart(2,'0')}${String(now.getDate()).padStart(2,'0')}`;
   const who = items[0] ? items[0].name : '학생';
   XLSX.writeFile(wb, `동행기록_${who}_${stamp}.xlsx`);
+}
+
+// ════════════════════════════════════════════════════════════
+// [추가 기능] 학급별 누적 순위 + 학년별·학급별 인쇄/엑셀
+// ════════════════════════════════════════════════════════════
+let classViewMode='records'; // 'records' = 누적 현황표 + 전체 기록 / 'rank' = 누적 많은 순
+function setClassViewMode(mode){
+  classViewMode=mode;
+  document.getElementById('classModeRecordsBtn').classList.toggle('ac', mode==='records');
+  document.getElementById('classModeRankBtn').classList.toggle('ac', mode==='rank');
+  const chip=document.querySelector('.class-chip.ac');
+  if(chip) selectClass(chip.dataset.grade, chip.dataset.cls, chip);
+}
+function classPrefix(grade,cls){ return grade+(cls.length===1?'0':'')+cls; }
+
+// 주어진 기록들에서 학생을 뽑아 누적 횟수 많은 순으로 정렬 (학년별 순위와 같은 기준)
+function getRankStudents(recs){
+  const m={};
+  recs.forEach(r=>{ if(!m[r.gradeClassNumber]) m[r.gradeClassNumber]={name:r.name, className:r.className}; });
+  return Object.keys(m)
+    .map(id=>({ id, name:m[id].name, className:m[id].className, cnt:counterMap[id]||0 }))
+    .filter(s=>s.cnt>0)
+    .sort((a,b)=> b.cnt-a.cnt);
+}
+
+function renderClassRank(grade,cls){
+  const label=`${grade}학년 ${cls}반`;
+  const wrap=document.getElementById('classResult');
+  const recs=allRecords.filter(r=>r.gradeClassNumber && r.gradeClassNumber.substring(0,3)===classPrefix(grade,cls));
+  const students=getRankStudents(recs);
+  if(!students.length){ wrap.innerHTML=`<div class="state-msg"><span class="ico">🏆</span>${label}에 누적 기록이 있는 학생이 없습니다.</div>`; return; }
+  const cards = students.map((s,i)=>{
+    const step=getStep(s.cnt), ccls=cntColorCls(s.cnt);
+    const flags = interventionMap[s.id] || {};
+    const applicable = INTERVENTION_STAGES.filter(st=> s.cnt>=st.minCnt);
+    const curStage = applicable.length ? applicable[applicable.length-1] : null;
+    const handled = curStage && flags[curStage.key];
+    const checksHtml = applicable.length ? `<div class="intervention-row">${applicable.map(st=>
+      `<label class="interv-label"><input type="checkbox" data-interv="${st.key}" data-sid="${esc(s.id)}" ${flags[st.key]?'checked':''}> ${st.label}</label>`
+    ).join('')}</div>` : '';
+    return `<div class="rank-card">
+      <div class="rank-top">
+        <span class="rank-num${i<3?' top3':''}">${i+1}</span>
+        <span class="student-name">${esc(s.name)}</span>
+        <span class="student-num">${esc(s.id)}</span>
+      </div>
+      <div class="rank-bottom">
+        <div class="left-group">
+          <span class="s-cnt ${ccls}">누적 ${s.cnt}회</span>
+          <span class="step-badge ${step.cls}">${step.label}</span>
+          ${handled?'<span class="handled-badge">✅ 처리완료</span>':''}
+        </div>
+        <button class="btn-detail" data-sid="${esc(s.id)}" data-sname="${esc(s.name)}">기록 보기</button>
+      </div>
+      ${checksHtml}
+    </div>`;
+  }).join('');
+  wrap.innerHTML = `<div class="result-header"><span class="result-count">🏆 ${label} 누적 순위 (${students.length}명)</span></div>${cards}`;
+  wrap.querySelectorAll('[data-interv]').forEach(cb=> cb.addEventListener('change', ()=>toggleIntervention(cb.dataset.sid, cb.dataset.interv, cb.checked)));
+  wrap.querySelectorAll('.btn-detail').forEach(b=> b.addEventListener('click', ()=>openModal(b.dataset.sid,b.dataset.sname)));
+}
+
+// 지금 화면에서 선택된 학년/학급과 보기 모드를 알려줌
+function getViewTarget(scope){
+  if(scope==='grade'){
+    const chip=document.querySelector('.grade-chip.ac'); if(!chip) return null;
+    const g=chip.dataset.grade;
+    return { label:`${g}학년`, recs: allRecords.filter(r=>r.grade===g).sort(sortDesc), mode: gradeViewMode };
+  }
+  const chip=document.querySelector('.class-chip.ac'); if(!chip) return null;
+  const g=chip.dataset.grade, c=chip.dataset.cls;
+  const recs=allRecords.filter(r=>r.gradeClassNumber && r.gradeClassNumber.substring(0,3)===classPrefix(g,c)).sort(sortDesc);
+  return { label:`${g}학년 ${c}반`, recs, mode: classViewMode };
+}
+function interventionText(s, mark){
+  const flags=interventionMap[s.id]||{};
+  return INTERVENTION_STAGES.filter(st=> s.cnt>=st.minCnt).map(st=> mark ? `${st.label} ${flags[st.key]?'✔':'☐'}` : st.label).join('  ');
+}
+function todayStamp(){ const n=new Date(); return `${n.getFullYear()}${String(n.getMonth()+1).padStart(2,'0')}${String(n.getDate()).padStart(2,'0')}`; }
+
+// ── 인쇄 ──
+function printView(scope){
+  const t=getViewTarget(scope);
+  if(!t){ showToast(scope==='grade'?'⚠️ 먼저 학년을 선택해 주세요.':'⚠️ 먼저 학급을 선택해 주세요.','err'); return; }
+  if(t.mode==='rank'){ printRank(t); return; }
+  if(!t.recs.length){ showToast('⚠️ 출력할 기록이 없습니다.','err'); return; }
+  printCtx=t;
+  showPrintModalFor(t.recs); // 유형 선택 · 담당교사 숨기기 옵션은 학생별 출력과 동일
+}
+function printCustomRecords(ctx, selectedCats, hideTeacher){
+  const recs=ctx.recs.filter(r=> selectedCats.length===0 || selectedCats.includes(r.category));
+  if(!recs.length){ showToast('⚠️ 선택한 유형의 기록이 없습니다.','err'); return; }
+  const area=document.getElementById('printArea');
+  area.innerHTML=`<div class="print-title">${esc(ctx.label)} 생활지도 기록 (${recs.length}건 · 최신순)</div>`+recs.map(recordCard).join('');
+  area.classList.toggle('print-hide-teacher', hideTeacher);
+  runCustomPrint();
+}
+function printRank(t){
+  const students=getRankStudents(t.recs);
+  if(!students.length){ showToast('⚠️ 누적 기록이 있는 학생이 없습니다.','err'); return; }
+  const rows=students.map((s,i)=>`<tr>
+    <td>${i+1}</td><td>${esc(s.name)}</td><td>${esc(s.id)}</td><td>${esc(s.className)}</td>
+    <td>${s.cnt}회</td><td>${esc(getStep(s.cnt).label)}</td><td class="left">${esc(interventionText(s,true))}</td></tr>`).join('');
+  const area=document.getElementById('printArea');
+  area.classList.remove('print-hide-teacher');
+  area.innerHTML=`<div class="print-title">🏆 ${esc(t.label)} 동행 누적 순위 (${students.length}명)</div>
+    <div class="print-sub">출력일: ${esc(formatDateWithDay(todayStamp().replace(/(\d{4})(\d{2})(\d{2})/,'$1-$2-$3')))}</div>
+    <table class="print-rank-table"><thead><tr><th>순위</th><th>이름</th><th>학번</th><th>반</th><th>누적</th><th>단계</th><th>단계별 지도 완료</th></tr></thead><tbody>${rows}</tbody></table>`;
+  runCustomPrint();
+}
+// body에 print-custom 표시를 붙여두면 인쇄 CSS가 앱 화면을 숨기고 #printArea만 보여줌.
+// 인쇄 창이 닫히면(afterprint) 표시를 떼고 출력 영역을 비움.
+function runCustomPrint(){
+  const area=document.getElementById('printArea');
+  document.body.classList.add('print-custom');
+  window.addEventListener('afterprint', ()=>{
+    document.body.classList.remove('print-custom');
+    area.innerHTML=''; area.classList.remove('print-hide-teacher');
+  }, { once:true });
+  window.print();
+}
+
+// ── 엑셀 ── (전체 기록 시트 + 누적 순위 시트 두 장을 한 파일에, 지금 보고 있는 화면이 첫 시트)
+function exportView(scope){
+  const t=getViewTarget(scope);
+  if(!t){ showToast(scope==='grade'?'⚠️ 먼저 학년을 선택해 주세요.':'⚠️ 먼저 학급을 선택해 주세요.','err'); return; }
+  if(typeof XLSX==='undefined'){ showToast('❌ 엑셀 라이브러리를 불러오지 못했습니다. 새로고침 후 다시 시도해 주세요.','err'); return; }
+  if(!t.recs.length){ showToast('⚠️ 내보낼 기록이 없습니다.','err'); return; }
+
+  const recRows = t.recs.map(r=>({
+    '학번': r.gradeClassNumber, '이름': r.name, '날짜': r.date, '교시': r.period,
+    '담당교사': r.teacher, '유형': r.category, '내용': r.content,
+    '누적여부': r.isCumulative==='YES' ? '누적' : (r.isCumulative==='OFFSET' ? '상쇄' : ''),
+    '누적횟수': (r.count!==''&&r.count!==undefined) ? r.count : ''
+  }));
+  const recWs = XLSX.utils.json_to_sheet(recRows);
+  recWs['!cols'] = [{wch:8},{wch:10},{wch:12},{wch:8},{wch:10},{wch:14},{wch:45},{wch:8},{wch:8}];
+
+  const students=getRankStudents(t.recs);
+  const rankAoa=[['순위','학번','이름','반','누적횟수','단계','학년부지도','학생부지도','동행프로그램','생교위']];
+  students.forEach((s,i)=>{
+    const flags=interventionMap[s.id]||{};
+    rankAoa.push([i+1, s.id, s.name, s.className, s.cnt, getStep(s.cnt).label,
+      ...INTERVENTION_STAGES.map(st=> s.cnt<st.minCnt ? '-' : (flags[st.key] ? '완료' : '미완료'))]);
+  });
+  const rankWs = XLSX.utils.aoa_to_sheet(rankAoa);
+  rankWs['!cols'] = [{wch:6},{wch:8},{wch:10},{wch:6},{wch:8},{wch:20},{wch:10},{wch:10},{wch:12},{wch:8}];
+
+  const wb = XLSX.utils.book_new();
+  if(t.mode==='rank'){ XLSX.utils.book_append_sheet(wb, rankWs, '누적순위'); XLSX.utils.book_append_sheet(wb, recWs, '전체기록'); }
+  else { XLSX.utils.book_append_sheet(wb, recWs, '전체기록'); XLSX.utils.book_append_sheet(wb, rankWs, '누적순위'); }
+  XLSX.writeFile(wb, `동행기록_${t.label.replace(/\s/g,'')}_${todayStamp()}.xlsx`);
 }
 
 // ── 실시간 갱신 시 현재 화면 유지하며 재렌더 ──
